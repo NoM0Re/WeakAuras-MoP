@@ -315,13 +315,11 @@ local FakeWeakAurasMixin = {
     -- to discuss these. But Auras have no purpose for calling these
     Add = true,
     AddMany = true,
-    AddManyFromAddons = true,
     Delete = true,
     HideOptions = true,
     Rename = true,
     NewAura = true,
     OptionsFrame = true,
-    RegisterAddon = true,
     RegisterDisplay = true,
     RegisterRegionOptions = true,
     RegisterSubRegionOptions = true,
@@ -332,9 +330,7 @@ local FakeWeakAurasMixin = {
     ShowOptions = true,
     -- Note these shouldn't exist in the WeakAuras namespace, but moving them takes a bit of effort,
     -- so for now just block them and clean them up later
-    CollisionResolved = true,
     ClearAndUpdateOptions = true,
-    CloseCodeReview = true,
     CloseImportExport = true,
     CreateTemplateView = true,
     FillOptions = true,
@@ -343,12 +339,9 @@ local FakeWeakAurasMixin = {
     GetDisplayButton = true,
     Import = true,
     NewDisplayButton = true,
-    OpenCodeReview = true,
     PickDisplay = true,
     SetMoverSizer = true,
-    SetImporting = true,
     ToggleOptions = true,
-    UpdateDisplayButton = true,
     UpdateGroupOrders = true,
     UpdateThumbnail = true,
     validate = true,
@@ -369,9 +362,7 @@ local FakeWeakAurasMixin = {
     frames = true,
     loadFrame = true,
     unitLoadFrame = true,
-    importDisplayButtons = true,
-    loaded = true
-
+    loaded = true,
   },
   override = {
     me = GetUnitName("player", true),

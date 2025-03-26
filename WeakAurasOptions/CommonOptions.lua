@@ -43,6 +43,18 @@ commonOptionsCache.GetSameAll = function(self, info)
   end
 end
 
+commonOptionsCache.SetNameAll = function(self, info, value)
+  local base = self:GetOrCreateData(info)
+  base.nameAll = value
+end
+
+commonOptionsCache.GetNameAll = function(self, info)
+  local base = self:GetData(info)
+  if base then
+    return base.nameAll
+  end
+end
+
 commonOptionsCache.Clear = function(self)
   self.data = {}
 end
@@ -560,6 +572,11 @@ local function replaceNameDescFuncs(intable, data, subOption)
   end
 
   local function nameAll(info)
+    local cached = commonOptionsCache:GetNameAll(info)
+    if (cached ~= nil) then
+      return cached
+    end
+
     local combinedName;
     local first = true;
     local foundNames = {};
@@ -571,6 +588,8 @@ local function replaceNameDescFuncs(intable, data, subOption)
           name = childOption.name(info);
         else
           name = childOption.name;
+          commonOptionsCache:SetNameAll(info, name)
+          return name
         end
         if (not name) then
         -- Do nothing
@@ -592,7 +611,10 @@ local function replaceNameDescFuncs(intable, data, subOption)
         end
       end
     end
-    return combinedName or "";
+    if combinedName then
+      commonOptionsCache:SetNameAll(info, combinedName)
+    end
+    return combinedName or ""
   end
 
   local function descAll(info)
@@ -1020,12 +1042,7 @@ local function PositionOptions(id, data, _, hideWidthHeight, disableSelfPoint, g
         WeakAuras.Add(data);
         WeakAuras.UpdateThumbnail(data);
         OptionsPrivate.ResetMoverSizer();
-        if(data.parent) then
-          local parentData = WeakAuras.GetData(data.parent);
-          if(parentData) then
-            WeakAuras.Add(parentData);
-          end
-        end
+        OptionsPrivate.Private.AddParents(data)
       end
     },
     yOffset = {
@@ -1044,12 +1061,7 @@ local function PositionOptions(id, data, _, hideWidthHeight, disableSelfPoint, g
         WeakAuras.Add(data);
         WeakAuras.UpdateThumbnail(data);
         OptionsPrivate.ResetMoverSizer();
-        if(data.parent) then
-          local parentData = WeakAuras.GetData(data.parent);
-          if(parentData) then
-            WeakAuras.Add(parentData);
-          end
-        end
+        OptionsPrivate.Private.AddParents(data)
       end
     },
     selfPoint = {
@@ -1433,7 +1445,6 @@ local function AddCommonTriggerOptions(options, data, triggernum, doubleWidth)
       end
       WeakAuras.Add(data);
       WeakAuras.UpdateThumbnail(data);
-      WeakAuras.UpdateDisplayButton(data);
       WeakAuras.ClearAndUpdateOptions(data.id);
     end,
     control = "WeakAurasSortedDropdown"

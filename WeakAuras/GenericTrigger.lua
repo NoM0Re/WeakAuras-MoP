@@ -547,6 +547,13 @@ local function RunTriggerFunc(allStates, data, id, triggernum, event, arg1, arg2
       if (ok and returnValue) then
         updateTriggerState = true;
       end
+      for key, state in pairs(allStates) do
+        if (type(state) ~= "table") then
+          errorHandler(string.format(L["Error in aura '%s' in %s. trigger. All States table contains a non table at key: '%s'."], id, triggernum, key))
+          wipe(allStates)
+          return
+        end
+      end
     elseif (data.statesParameter == "all") then
       local ok, returnValue = Retail.xpcall(data.triggerFunc, errorHandler, allStates, event, arg1, arg2, ...);
       if( (ok and returnValue) or optionsEvent) then
@@ -1438,6 +1445,7 @@ do
   local mainSpeed, offSpeed = UnitAttackSpeed("player")
   local casting = false
   local skipNextAttack, skipNextAttackCount
+  local isAttacking
 
   function WeakAuras.GetSwingTimerInfo(hand)
     if(hand == "main") then
@@ -1537,7 +1545,7 @@ do
   end
 
   local function swingTimerCheck(event, unit, guid, spell)
-    if unit ~= "player" then return end
+    if event ~= "PLAYER_EQUIPMENT_CHANGED" and unit and unit ~= "player" then return end
     Private.StartProfileSystem("generictrigger swing");
     if event == "UNIT_ATTACK_SPEED" then
       local mainSpeedNew, offSpeedNew = UnitAttackSpeed("player")
@@ -1565,11 +1573,47 @@ do
       mainSpeed, offSpeed = mainSpeedNew, offSpeedNew
     elseif casting and (event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_FAILED") then
       casting = false
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" and isAttacking then
+      local currentTime = GetTime()
+      mainSpeed, offSpeed = UnitAttackSpeed("player")
+      offSpeed = offSpeed or 0
+      local startEvent = false
+      if lastSwingMain then
+        lastSwingMain = currentTime
+        swingDurationMain = mainSpeed
+        mainSwingOffset = 0
+        timer:CancelTimer(mainTimer)
+        mainTimer = timer:ScheduleTimerFixed(swingEnd, mainSpeed, "main")
+        startEvent = true
+      end
+      if lastSwingOff then
+        lastSwingOff = currentTime
+        swingDurationOff = offSpeed
+        timer:CancelTimer(offTimer)
+        if C_PaperDollInfo.OffhandHasWeapon() then
+          offTimer = timer:ScheduleTimerFixed(swingEnd, offSpeed, "off")
+          startEvent = true
+        else
+          WeakAuras.ScanEvents("SWING_TIMER_END")
+        end
+      end
+      if lastSwingRange then
+        local speed = UnitRangedDamage("player")
+        lastSwingRange = currentTime
+        swingDurationRange = speed
+        timer:CancelTimer(rangeTimer)
+        rangeTimer = timer:ScheduleTimerFixed(swingEnd, speed, "ranged")
+        startEvent = true
+      end
+      if startEvent then
+        WeakAuras.ScanEvents("SWING_TIMER_START")
+      end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
       if Private.reset_swing_spells[spell] or casting then
         if casting then
           casting = false
         end
+        if not isAttacking then return end
         local event;
         mainSpeed, offSpeed = UnitAttackSpeed("player");
         lastSwingMain = GetTime();
@@ -1615,6 +1659,10 @@ do
         lastSwingOff, swingDurationOff = nil, nil
         WeakAuras.ScanEvents("SWING_TIMER_END")
       end
+    elseif event == "PLAYER_ENTER_COMBAT" then
+      isAttacking = true
+    elseif event == "PLAYER_LEAVE_COMBAT" then
+      isAttacking = nil
     end
     Private.StopProfileSystem("generictrigger swing");
   end
@@ -1624,6 +1672,8 @@ do
       swingTimerFrame = CreateFrame("frame");
       swingTimerFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
       swingTimerFrame:RegisterEvent("PLAYER_ENTER_COMBAT");
+      swingTimerFrame:RegisterEvent("PLAYER_LEAVE_COMBAT");
+      swingTimerFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED");
       swingTimerFrame:RegisterUnitEvent("UNIT_ATTACK_SPEED", "player");
       swingTimerFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
       if WeakAuras.IsClassic() or WeakAuras.IsBCC() then
@@ -3559,6 +3609,19 @@ function GenericTrigger.GetAdditionalProperties(data, triggernum)
 
       if (found) then
         ret = ret .. additional;
+      end
+    end
+  else
+    if (trigger.custom_type == "stateupdate") then
+      local variables = events[data.id][triggernum].tsuConditionVariables();
+      if (type(variables) == "table") then
+        for var, varData in pairs(variables) do
+          if (type(varData) == "table") then
+            if varData.display then
+              ret = ret .. "|cFFFF0000%".. triggernum .. "." .. var .. "|r - " .. varData.display .. "\n"
+            end
+          end
+        end
       end
     end
   end

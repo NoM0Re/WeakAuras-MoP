@@ -22,7 +22,7 @@ end
 local function WrapTextInColorCodeFnLoader()
 	local ver = tonumber(select(4, GetBuildInfo()))
 	if ver >= 701000 then return WrapTextInColorCode end
-	
+
 	return CustomWrapTextInColorCode
 end
 
@@ -1941,6 +1941,7 @@ Private.grow_types = {
 
 -- horizontal types: R (right), L (left)
 -- vertical types: U (up), D (down)
+---@type table<dynamicGroupGridType, string>
 Private.grid_types = {
   RU = L["Right, then Up"],
   UR = L["Up, then Right"],
@@ -1950,6 +1951,16 @@ Private.grid_types = {
   DR = L["Down, then Right"],
   LD = L["Left, then Down"],
   DL = L["Down, then Left"],
+  HD = L["Centered Horizontal, then Down"],
+  HU = L["Centered Horizontal, then Up"],
+  VR = L["Centered Vertical, then Right"],
+  VL = L["Centered Vertical, then Left"],
+  DH = L["Down, then Centered Horizontal"],
+  UH = L["Up, then Centered Horizontal"],
+  LV = L["Left, then Centered Vertical"],
+  RV = L["Right, then Centered Vertical"],
+  HV = L["Centered Horizontal, then Centered Vertical"],
+  VH = L["Centered Vertical, then Centered Horizontal"]
 }
 
 Private.text_rotate_types = {
@@ -2578,12 +2589,14 @@ Private.update_categories = {
     fields = {},
     default = true,
     label = L["Remove Obsolete Auras"],
+    skipInSummary = true
   },
   {
     name = "newchildren",
     fields = {},
     default = true,
     label = L["Add Missing Auras"],
+    skipInSummary = true
   },
   {
     name = "metadata",
@@ -2604,6 +2617,9 @@ Private.internal_fields = {
   internalVersion = true,
   sortHybridTable = true,
   tocversion = true,
+  parent = true,
+  controlledChildren = true,
+  source = true
 }
 
 -- fields that are not included in exported data
@@ -2617,6 +2633,14 @@ Private.non_transmissable_fields = {
   ignoreWagoUpdate = true,
   preferToUpdate = true,
 }
+
+-- For nested groups, we do transmit parent + controlledChildren
+  Private.non_transmissable_fields_v2000 = {
+    authorMode = true,
+    skipWagoUpdate = true,
+    ignoreWagoUpdate = true,
+    preferToUpdate = true,
+  }
 
 WeakAuras.data_stub = {
   -- note: this is the minimal data stub which prevents false positives in diff upon reimporting an aura.
@@ -3220,6 +3244,8 @@ if WeakAuras.IsClassic() then
     6807, 6808, 6809, 8972, 9745, 9880, 9881, -- Maul
     20549, -- War Stomp
     2480, 7919, 7918, 2764, 5019, -- Shoots
+    19434, 20900, 20901, 20902, 20903, 20904, 27065, -- Aimed Shot
+    20066, -- Repentance
   }
   for i, spellid in ipairs(reset_swing_spell_list) do
     Private.reset_swing_spells[spellid] = true

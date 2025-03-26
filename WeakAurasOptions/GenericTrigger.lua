@@ -39,7 +39,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.custom_type = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+        WeakAuras.UpdateThumbnail(data);
         WeakAuras.ClearAndUpdateOptions(data.id);
       end
     },
@@ -57,7 +57,6 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.check = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
       end
     },
     check2 = {
@@ -74,7 +73,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.check = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
       end
     },
     events = {
@@ -90,7 +89,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.events = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
       end
     },
     events2 = {
@@ -104,7 +103,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.events = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
       end
     },
     event_customError = {
@@ -175,7 +174,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.custom_hide = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
       end
     },
     custom_hide2 = {
@@ -189,7 +188,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.custom_hide = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
       end
     },
     dynamicDuration = {
@@ -204,7 +203,7 @@ local function GetCustomTriggerOptions(data, triggernum)
       set = function(info, v)
         trigger.dynamicDuration = v;
         WeakAuras.Add(data);
-        WeakAuras.UpdateDisplayButton(data);
+
         WeakAuras.ClearAndUpdateOptions(data.id);
       end
     },
@@ -257,7 +256,7 @@ local function GetCustomTriggerOptions(data, triggernum)
   };
 
   local function extraSetFunction()
-    WeakAuras.UpdateDisplayButton(data);
+    WeakAuras.UpdateThumbnail(data);
   end
 
   local function extraSetFunctionReload()
@@ -289,7 +288,7 @@ local function GetCustomTriggerOptions(data, triggernum)
     type = "string",
     test = "function",
     events = "table",
-    values = "table"
+    values = "table",
   }
 
   local function validateCustomVariables(variables)

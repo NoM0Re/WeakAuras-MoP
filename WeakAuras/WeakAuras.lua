@@ -36,7 +36,23 @@ local Retail = LibStub("LibRetail")
 Private.maxTimerDuration = 604800; -- A week, in seconds
 local maxUpTime = 4294967; -- 2^32 / 1000
 
-Private.callbacks = LibStub("CallbackHandler-1.0"):New(Private)
+-- The worlds simplest callback system
+-- That supports 1:N, but no deregistration and breaks if registrating in a callback
+Private.callbacks = {}
+Private.callbacks.events = {}
+
+function Private.callbacks:RegisterCallback(event, handler)
+  self.events[event] = self.events[event] or {}
+  tinsert(self.events[event], handler)
+end
+
+function Private.callbacks:Fire(event, ...)
+  if self.events[event] then
+    for index, f in ipairs(self.events[event]) do
+      f(event, ...)
+    end
+  end
+end
 
 function WeakAurasTimers:ScheduleTimerFixed(func, delay, ...)
   if (delay < Private.maxTimerDuration) then
@@ -158,15 +174,6 @@ BINDING_NAME_WEAKAURASPRINTPROFILING = L["Print Profiling Results"]
 --  debug: If set to true, WeakAura.debug() outputs messages to the chat frame
 --  displays: All aura settings, keyed on their id
 local db;
-
-local registeredFromAddons;
--- List of addons that registered displays
-Private.addons = {};
-local addons = Private.addons;
-
--- used if an addon tries to register a display under an id that the user already has a display with that id
-Private.collisions = {};
-local collisions = Private.collisions;
 
 -- While true no events are handled. E.g. WeakAuras is paused while the Options dialog is open
 local paused = true;
@@ -968,11 +975,6 @@ function Private.Login(initialTime, takeNewSnapshots)
 
     WeakAuras.AddMany(toAdd, takeNewSnapshots);
     coroutine.yield();
-    WeakAuras.AddManyFromAddons(from_files);
-    WeakAuras.RegisterDisplay = WeakAuras.AddFromAddon;
-    coroutine.yield();
-    Private.ResolveCollisions(function() registeredFromAddons = true; end);
-    coroutine.yield();
 
     -- check in case of a disconnect during an encounter.
     if (db.CurrentEncounter) then
@@ -1130,9 +1132,8 @@ loadedFrame:SetScript("OnEvent", function(self, event, addon)
   end
 end)
 
-function WeakAuras.SetImporting(b)
+function Private.SetImporting(b)
   importing = b;
-  Private.RefreshTooltipButtons()
 end
 
 function WeakAuras.IsImporting()
@@ -1396,6 +1397,7 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
 
   local changed = 0;
   local shouldBeLoaded, couldBeLoaded;
+  local parentsToCheck = {}
   wipe(toLoad);
   wipe(toUnload);
 
@@ -1411,11 +1413,17 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
       if(shouldBeLoaded and not loaded[id]) then
         changed = changed + 1;
         toLoad[id] = true;
+        for parent in Private.TraverseParents(data) do
+          parentsToCheck[parent.id] = true
+        end
       end
 
       if(loaded[id] and not shouldBeLoaded) then
         toUnload[id] = true;
         changed = changed + 1;
+        for parent in Private.TraverseParents(data) do
+          parentsToCheck[parent.id] = true
+        end
       end
       if(shouldBeLoaded) then
         loaded[id] = true;
@@ -1433,19 +1441,23 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
     Private.FinishLoadUnload();
   end
 
-  -- This iterates over all auras and could be optimized to only check
-  -- parents of children that have changed. (A further optimization would be to distinguish
-  -- between auras that changed from unloaded to loaded and vice versa.
-  -- The complicated bit is that a full check must be done if the group memberships changed,
-  -- and currently this function handles that too.
-  for id, data in pairs(db.displays) do
+  Private.ScanForLoadsGroup(parentsToCheck)
+  Private.callbacks:Fire("ScanForLoads")
+  wipe(toLoad);
+  wipe(toUnload)
+end
+function Private.ScanForLoadsGroup(toCheck)
+  for id in pairs(toCheck) do
+    local data = WeakAuras.GetData(id)
     if(data.controlledChildren) then
       if(#data.controlledChildren > 0) then
-        local any_loaded;
+        local any_loaded = false;
         for child in Private.TraverseLeafs(data) do
           if(loaded[child.id] ~= nil) then
             any_loaded = true;
             break;
+          else
+            any_loaded = nil
           end
         end
         loaded[id] = any_loaded;
@@ -1454,11 +1466,6 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
       end
     end
   end
-
-  Private.callbacks:Fire("ScanForLoads")
-
-  wipe(toLoad);
-  wipe(toUnload)
 end
 
 function Private.ScanForLoads(toCheck, event, arg1, ...)
@@ -1586,6 +1593,10 @@ function Private.Resume()
   UnloadAll();
   scanForLoadsImpl();
 
+  if loadEvents["GROUP"] then
+    Private.ScanForLoadsGroup(loadEvents["GROUP"])
+  end
+
   Private.ResumeAllDynamicGroups();
 end
 
@@ -1684,7 +1695,9 @@ function WeakAuras.Delete(data)
       if parentData.sortHybridTable then
         parentData.sortHybridTable[id] = nil
       end
-      Private.ClearAuraEnvironment(data.parent);
+      for parent in Private.TraverseParents(data) do
+        Private.ClearAuraEnvironment(parent.id);
+      end
     end
   end
 
@@ -1716,13 +1729,6 @@ function WeakAuras.Delete(data)
   regions[id].region:Hide();
 
   db.registered[id] = nil;
-  if(WeakAuras.importDisplayButtons and WeakAuras.importDisplayButtons[id]) then
-    local button = WeakAuras.importDisplayButtons[id];
-    button.checkbox:SetChecked(false);
-    if(button.updateChecked) then
-      button.updateChecked();
-    end
-  end
 
   for _, triggerSystem in pairs(triggerSystems) do
     triggerSystem.Delete(id);
@@ -1758,11 +1764,7 @@ function WeakAuras.Delete(data)
 
   Private.RemoveHistory(data.uid)
 
-  -- Add the parent
-  if parentUid then
-    WeakAuras.Add(Private.GetDataByUID(parentUid))
-  end
-
+  Private.AddParents(data)
   Private.callbacks:Fire("Delete", uid, id, parentUid, parentId)
 end
 
@@ -1907,163 +1909,6 @@ function WeakAuras.DeepMixin(dest, source)
   recurse(source, dest);
 end
 
-function WeakAuras.RegisterAddon(addon, displayName, description, icon)
-  if(addons[addon]) then
-    addons[addon].displayName = displayName;
-    addons[addon].description = description;
-    addons[addon].icon = icon;
-    addons[addon].displays = addons[addon].displays or {};
-  else
-    addons[addon] = {
-      displayName = displayName,
-      description = description,
-      icon = icon,
-      displays = {}
-    };
-  end
-end
-
-function WeakAuras.RegisterDisplay(addon, data, force)
-  tinsert(from_files, {addon, data, force});
-end
-
-function WeakAuras.AddManyFromAddons(table)
-  for _, addData in ipairs(table) do
-    WeakAuras.AddFromAddon(addData[1], addData[2], addData[3]);
-  end
-end
-
-function WeakAuras.AddFromAddon(addon, data, force)
-  local id = data.id;
-  if(id and addons[addon]) then
-    addons[addon].displays[id] = data;
-    if(db.registered[id]) then
-    -- This display was already registered
-    -- It is unnecessary to add it again
-    elseif(force and not db.registered[id] == false) then
-      if(db.displays[id]) then
-        -- ID collision
-        collisions[id] = {addon, data};
-      else
-        db.registered[id] = addon;
-        WeakAuras.Add(data);
-      end
-    end
-  end
-end
-
-function WeakAuras.CollisionResolved(addon, data, force)
-  WeakAuras.AddFromAddon(addon, data, force);
-end
-
-function Private.IsDefinedByAddon(id)
-  return db.registered[id];
-end
-
-function Private.ResolveCollisions(onFinished)
-  local num = 0;
-  for id, _ in pairs(collisions) do
-    num = num + 1;
-  end
-
-  if(num > 0) then
-    local baseText;
-    local buttonText;
-    if(registeredFromAddons) then
-      if(num == 1) then
-        baseText = L["Resolve collisions dialog singular"];
-        buttonText = L["Done"];
-      else
-        baseText = L["Resolve collisions dialog"];
-        buttonText = L["Next"];
-      end
-    else
-      if(num == 1) then
-        baseText = L["Resolve collisions dialog startup singular"];
-        buttonText = L["Done"];
-      else
-        baseText = L["Resolve collisions dialog startup"];
-        buttonText = L["Next"];
-      end
-    end
-
-    local numResolved = 0;
-    local currentId = next(collisions);
-
-    local function UpdateText(popup)
-      popup.text:SetText(baseText..(numResolved or "error").."/"..(num or "error"));
-    end
-
-    StaticPopupDialogs["WEAKAURAS_RESOLVE_COLLISIONS"] = {
-      text = baseText,
-      button1 = buttonText,
-      OnAccept = function(self)
-        -- Do the collision resolution
-        local newId = self.editBox:GetText();
-        if(WeakAuras.OptionsFrame and WeakAuras.OptionsFrame() and WeakAuras.displayButtons and WeakAuras.displayButtons[currentId]) then
-          WeakAuras.displayButtons[currentId].callbacks.OnRenameAction(newId)
-        else
-          local data = WeakAuras.GetData(currentId);
-          if(data) then
-            WeakAuras.Rename(data, newId);
-          else
-            print("|cFF8800FFWeakAuras|r: Data not found");
-          end
-        end
-
-        WeakAuras.CollisionResolved(collisions[currentId][1], collisions[currentId][2], true);
-        numResolved = numResolved + 1;
-
-        -- Get the next id to resolve
-        currentId = next(collisions, currentId);
-        if(currentId) then
-          -- There is another conflict to resolve - hook OnHide to reshow the dialog as soon as it hides
-          self:SetScript("OnHide", function(self)
-            self:Show();
-            UpdateText(self);
-            self.editBox:SetText(currentId);
-            self:SetScript("OnHide", nil);
-            if not(next(collisions, currentId)) then
-              self.button1:SetText(L["Done"]);
-            end
-          end);
-        else
-          self.editBox:SetScript("OnTextChanged", nil);
-          wipe(collisions);
-          if(onFinished) then
-            onFinished();
-          end
-        end
-      end,
-      hasEditBox = true,
-      hasWideEditBox = true,
-      hideOnEscape = true,
-      whileDead = true,
-      showAlert = true,
-      timeout = 0,
-      preferredindex = STATICPOPUP_NUMDIALOGS
-    };
-
-    local popup = StaticPopup_Show("WEAKAURAS_RESOLVE_COLLISIONS");
-    popup.editBox:SetScript("OnTextChanged", function(self)
-      local newid = self:GetText();
-      if(collisions[newid] or db.displays[newid]) then
-        popup.button1:Disable();
-      else
-        popup.button1:Enable();
-      end
-    end);
-    popup.editBox:SetText(currentId);
-    popup.text:SetJustifyH("left");
-    popup.icon:SetTexture("Interface\\Addons\\WeakAuras\\Media\\Textures\\icon.blp");
-    popup.icon:SetVertexColor(0.833, 0, 1);
-
-    UpdateText(popup);
-  elseif(onFinished) then
-    onFinished();
-  end
-end
-
 local function LastUpgrade()
   return db.lastUpgrade and date(nil, db.lastUpgrade) or "unknown"
 end
@@ -2074,7 +1919,7 @@ end
 
 local function RepairDatabase(loginAfter)
   local coro = coroutine.create(function()
-    WeakAuras.SetImporting(true)
+    Private.SetImporting(true)
     -- set db version to current code version
     db.dbVersion = WeakAuras.InternalVersion()
     -- reinstall snapshots from history
@@ -2089,7 +1934,7 @@ local function RepairDatabase(loginAfter)
       end
     end
     db.displays = newDB
-    WeakAuras.SetImporting(false)
+    Private.SetImporting(false)
     -- finally, login
     Private.Login()
   end)
@@ -2164,14 +2009,7 @@ function Private.SyncParentChildRelationships(silent)
   local childHasParent = {}
   for id, data in pairs(db.displays) do
     if data.parent then
-      if data.controlledChildren then
-        if not silent then
-          prettyPrint("Detected corruption in saved variables: "..id.." is a group that thinks it's a parent.")
-        end
-        -- A display cannot have both children and a parent
-        data.parent = nil
-        parents[id] = data
-      elseif not db.displays[data.parent] then
+      if not db.displays[data.parent] then
         if not(silent) then
           prettyPrint("Detected corruption in saved variables: "..id.." has a nonexistent parent.")
         end
@@ -2185,7 +2023,8 @@ function Private.SyncParentChildRelationships(silent)
       else
         children[id] = data
       end
-    elseif data.controlledChildren then
+    end
+    if data.controlledChildren then
       parents[id] = data
     end
   end
@@ -2193,6 +2032,7 @@ function Private.SyncParentChildRelationships(silent)
   for id, data in pairs(parents) do
     local groupChildren = {}
     local childrenToRemove = {}
+    local dynamicGroup = data.regionType == "dynamicgroup"
     for index, childID in ipairs(data.controlledChildren) do
       local child = children[childID]
       if not child then
@@ -2204,6 +2044,13 @@ function Private.SyncParentChildRelationships(silent)
         if not silent then
           prettyPrint("Detected corruption in saved variables: "..id.." thinks it controls "..childID.." which it does not.")
         end
+        childrenToRemove[index] = true
+      elseif dynamicGroup and child.controlledChildren then
+        if not silent then
+          prettyPrint("Detected corruption in saved variables: "..id.." is a dynamic group and controls "..childID.." which is a group/dynamicgroup.")
+        end
+        child.parent = nil
+        children[child.id] = nil
         childrenToRemove[index] = true
       elseif groupChildren[childID] then
         if not silent then
@@ -2609,6 +2456,12 @@ local function pAdd(data, simpleChange)
   end
 
   data.uid = data.uid or WeakAuras.GenerateUniqueID()
+  if db.displays[id] and db.displays[id].uid ~= data.uid then
+    print("Improper? arguments to WeakAuras.Add - id", id, "is assigned to a different uid.", data.uid, db.displays[id].uid)
+  end
+  if UIDtoID[data.uid] and UIDtoID[data.uid] ~= id then
+    print("Improper? arguments to WeakAuras.Add - uid is assigned to a id. Uid:", data.uid, "assigned too:", UIDtoID[data.uid], "assigning now to", data.id)
+  end
   local otherID = UIDtoID[data.uid]
   if not otherID then
     UIDtoID[data.uid] = id
@@ -2630,12 +2483,15 @@ local function pAdd(data, simpleChange)
   else
     if (data.controlledChildren) then
       Private.ClearAuraEnvironment(id);
-      if data.parent then
-        Private.ClearAuraEnvironment(data.parent);
+      for parent in Private.TraverseParents(data) do
+        Private.ClearAuraEnvironment(parent.id);
       end
       db.displays[id] = data;
       WeakAuras.SetRegion(data);
-    else
+      Private.ScanForLoadsGroup({[id] = true});
+      loadEvents["GROUP"] = loadEvents["GROUP"] or {}
+      loadEvents["GROUP"][id] = true
+    else -- Non group aura
       local visible
       if (WeakAuras.IsOptionsOpen()) then
         visible = Private.FakeStatesFor(id, false)
@@ -2648,8 +2504,8 @@ local function pAdd(data, simpleChange)
       end
 
       Private.ClearAuraEnvironment(id);
-      if data.parent then
-        Private.ClearAuraEnvironment(data.parent);
+      for parent in Private.TraverseParents(data) do
+        Private.ClearAuraEnvironment(parent.id);
       end
 
       db.displays[id] = data;
@@ -5243,8 +5099,8 @@ do
     end
 
     if data.controlledChildren then
-      for _, children in ipairs(data.controlledChildren) do
-        Traverse(WeakAuras.GetData(children), true, includeGroups, includeLeafs)
+      for _, child in ipairs(data.controlledChildren) do
+        Traverse(WeakAuras.GetData(child), true, includeGroups, includeLeafs)
       end
     end
   end
@@ -5271,6 +5127,14 @@ do
 
   local function TraverseAll(data)
     return Traverse(data, true, true, true)
+  end
+
+  local function TraverseParents(data)
+    while data.parent do
+      local parentData = WeakAuras.GetData(data.parent)
+      coroutine.yield(parentData)
+      data = parentData
+    end
   end
 
   -- Only non-group auras, not include self
@@ -5301,6 +5165,10 @@ do
   -- All Children and self
   function Private.TraverseAll(data)
     return coroutine.wrap(TraverseAll), data
+  end
+
+  function Private.TraverseParents(data)
+    return coroutine.wrap(TraverseParents), data
   end
 end
 

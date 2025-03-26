@@ -1,7 +1,7 @@
 ## Interface: 50400
 ## Title: WeakAuras Options
 ## Author: The WeakAuras Team
-## Version: @project-version@
+## Version: 3.5.0
 ## Notes: Options for WeakAuras
 ## Notes-esES: Opciones para WeakAuras
 ## Notes-deDE: Optionen für WeakAuras
@@ -51,7 +51,6 @@ BuffTrigger2.lua
 GenericTrigger.lua
 
 WeakAurasOptions.lua
-ExternalAddons.lua
 ConditionOptions.lua
 AuthorOptions.lua
 
@@ -64,6 +63,7 @@ OptionsFrames\ImportExport.lua
 OptionsFrames\ModelPicker.lua
 OptionsFrames\TextEditor.lua
 OptionsFrames\TexturePicker.lua
+OptionsFrames\Update.lua
 
 # Misc frames
 OptionsFrames\MoverSizer.lua
@@ -89,3 +89,5 @@ AceGUI-Widgets\AceGUIContainer-WeakAurasTreeGroup.lua
 AceGUI-Widgets\AceGUIWidget-WeakAurasSnippetButton.lua
 AceGUI-Widgets\AceGUIContainer-WeakAurasInlineGroup.lua
 AceGUI-Widgets\AceGUIWidget-WeakAurasExpandAnchor.lua
+AceGUI-Widgets\AceGUIWidget-WeakAurasSpacer.lua
+AceGUI-Widgets\AceGuiWidget-WeakAurasProgressBar.lua

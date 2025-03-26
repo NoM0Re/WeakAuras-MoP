@@ -694,9 +694,9 @@ local growers = {
     local gridWidth = data.gridWidth
     local rowSpace = data.rowSpace
     local colSpace = data.columnSpace
-    local rowFirst = (gridType:find("^[RL]")) ~= nil
+    local rowFirst = (gridType:find("^[RLH]")) ~= nil
     local limit = data.useLimit and data.limit or math.huge
-    local rowMul, colMul
+    local rowMul, colMul, primary_horizontal, secondary_horizontal, primary_vertical, secondary_vertical
     if gridType:find("D") then
       rowMul = -1
     else
@@ -706,6 +706,16 @@ local growers = {
       colMul = -1
     else
       colMul = 1
+    end
+    if gridType:sub(1, 1) == "H" then
+      primary_horizontal = true
+    elseif gridType:sub(2, 2) == "H" then
+      secondary_horizontal = true
+    end
+    if gridType:sub(1, 1) == "V" then
+      primary_vertical = true
+    elseif gridType:sub(2, 2) == "V" then
+      secondary_vertical = true
     end
     local primary = {
       -- x direction
@@ -726,7 +736,10 @@ local growers = {
     if not rowFirst then
       primary, secondary = secondary, primary
     end
-    local anchorPerUnitFunc = data.useAnchorPerUnit and createAnchorPerUnitFunc(data)
+    local anchorPerUnitFunc, anchorOn
+    if data.useAnchorPerUnit then
+      anchorPerUnitFunc, anchorOn = createAnchorPerUnitFunc(data)
+    end
     return function(newPositions, activeRegions)
       local frames = {}
       if anchorPerUnitFunc then
@@ -740,30 +753,93 @@ local growers = {
         secondary.current = 0
         secondary.max = 0
         newPositions[frame] = {}
+        local minX, maxX, minY, maxY, totalMinX, totalMaxX, totalMinY, totalMaxY
+        local start
         for i, regionData in ipairs(regionDatas) do
           if i <= numVisible then
-            newPositions[frame][regionData] = { [primary.coord] = primary.current, [secondary.coord] = secondary.current, [3] = true }
+            newPositions[frame][regionData] = {
+              [primary.coord] = primary.current,
+              [secondary.coord] = secondary.current,
+              [3] = true
+            }
+            local x, y = newPositions[frame][regionData][1], newPositions[frame][regionData][2]
+            if minX == nil then
+              minX, maxX, minY, maxY = x, x, y, y
+              start = i
+            else
+              minX, maxX = math.min(minX, x), math.max(maxX, x)
+              minY, maxY = math.min(minY, y), math.max(maxY, y)
+            end
+            if totalMinX == nil then
+              totalMinX, totalMaxX, totalMinY, totalMaxY = x, x, y, y
+            else
+              totalMinX, totalMaxX = math.min(totalMinX, x), math.max(totalMaxX, x)
+              totalMinY, totalMaxY = math.min(totalMinY, y), math.max(totalMaxY, y)
+            end
             secondary.max = max(secondary.max, getDimension(regionData, secondary.dim))
             if i % gridWidth == 0 then
+              if primary_horizontal then
+                local offsetX = (maxX - minX) / 2
+                for j = start, i do
+                  newPositions[frame][regionDatas[j]][1] = newPositions[frame][regionDatas[j]][1] - offsetX
+                end
+              end
+              if primary_vertical then
+                local offsetY = (maxY - minY) / 2
+                for j = start, i do
+                  newPositions[frame][regionDatas[j]][2] = newPositions[frame][regionDatas[j]][2] - offsetY
+                end
+              end
               primary.current = 0
               secondary.current = secondary.current + (secondary.space + secondary.max) * secondary.mul
               secondary.max = 0
+              minX, maxX = nil, nil
+              minY, maxY = nil, nil
             else
               primary.current = primary.current + (primary.space + getDimension(regionData, primary.dim)) * primary.mul
             end
           end
         end
+        if (primary_horizontal or primary_vertical) and minX then
+          local offsetX = (maxX - minX) / 2
+          local offsetY = (maxY - minY) / 2
+          for j = start, #regionDatas do
+            if j <= numVisible then
+              if primary_horizontal then
+                newPositions[frame][regionDatas[j]][1] = newPositions[frame][regionDatas[j]][1] - offsetX
+              end
+              if primary_vertical then
+                newPositions[frame][regionDatas[j]][2] = newPositions[frame][regionDatas[j]][2] - offsetY
+              end
+            end
+          end
+        end
+        if (secondary_horizontal or secondary_vertical) and totalMinX then
+          local offsetX = (totalMaxX - totalMinX) / 2
+          local offsetY = (totalMaxY - totalMinY) / 2
+          for j = 1, #regionDatas do
+            if j <= numVisible then
+              if secondary_horizontal then
+                newPositions[frame][regionDatas[j]][1] = newPositions[frame][regionDatas[j]][1] - offsetX
+              end
+              if secondary_vertical then
+                newPositions[frame][regionDatas[j]][2] = newPositions[frame][regionDatas[j]][2] - offsetY
+              end
+            end
+          end
+        end
       end
-    end
+    end, anchorOn
   end,
   CUSTOM = function(data)
     local growStr = data.customGrow or ""
     local growFunc = WeakAuras.LoadFunction("return " .. growStr, data.id, "custom grow") or noop
     return function(newPositions, activeRegions)
       Private.ActivateAuraEnvironment(data.id)
-      local ok = Retail.xpcall(growFunc, geterrorhandler(), newPositions, activeRegions)
+      local ok, ret = pcall(growFunc, newPositions, activeRegions)
       Private.ActivateAuraEnvironment()
       if not ok then
+        geterrorhandler()(ret)
         wipe(newPositions)
       end
     end
@@ -881,6 +957,7 @@ local function modify(parent, region, data)
     else
       childRegion:SetFrameStrata(Private.frame_strata_types[childData.frameStrata]);
     end
+    Private.ApplyFrameLevel(childRegion)
     return regionData
   end
 

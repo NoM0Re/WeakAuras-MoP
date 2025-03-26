@@ -1595,7 +1595,7 @@ function WeakAuras.CreateTemplateView(Private, frame)
       WeakAuras.FillOptions()
       WeakAuras.NewDisplayButton(data);
       WeakAuras.UpdateThumbnail(data);
-      WeakAuras.UpdateDisplayButton(data);
+
     end
     for child in TemplatePrivate.Private.TraverseLeafsOrAura(data) do
       handle(child, item, subType);
@@ -1614,7 +1614,7 @@ function WeakAuras.CreateTemplateView(Private, frame)
       WeakAuras.FillOptions()
       WeakAuras.NewDisplayButton(data);
       WeakAuras.UpdateThumbnail(data);
-      WeakAuras.UpdateDisplayButton(data);
+
     end
     for child in TemplatePrivate.Private.TraverseLeafsOrAura(data) do
       handle(child, item, subType);
