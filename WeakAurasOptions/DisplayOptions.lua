@@ -180,7 +180,12 @@ function OptionsPrivate.GetDisplayOptions(data)
         end
         WeakAuras.Add(data);
         WeakAuras.UpdateThumbnail(data);
-        OptionsPrivate.Private.AddParents(data)
+        if(data.parent) then
+          local parentData = WeakAuras.GetData(data.parent);
+          if(parentData) then
+            WeakAuras.Add(parentData);
+          end
+        end
         OptionsPrivate.ResetMoverSizer();
       end,
       args = options
