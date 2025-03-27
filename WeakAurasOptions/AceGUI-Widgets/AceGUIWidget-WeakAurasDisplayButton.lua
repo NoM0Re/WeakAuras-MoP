@@ -505,7 +505,11 @@ local methods = {
           if (OptionsPrivate.IsDisplayPicked(self.data.id)) then
             OptionsPrivate.ClearPicks();
           else
-            WeakAuras.PickDisplay(self.data.id);
+            if self.data.controlledChildren then
+              WeakAuras.PickDisplay(self.data.id, "group")
+            else
+              WeakAuras.PickDisplay(self.data.id);
+            end
           end
           self:ReloadTooltip();
         end
@@ -742,40 +746,19 @@ local methods = {
 
     function self.callbacks.OnViewClick()
       OptionsPrivate.Private.PauseAllDynamicGroups();
-
-      if(self.view.func() == 2) then
+      if(self.view.visibility == 2) then
         for child in OptionsPrivate.Private.TraverseAllChildren(self.data) do
           WeakAuras.GetDisplayButton(child.id):PriorityHide(2);
         end
+        self:PriorityHide(2)
       else
         for child in OptionsPrivate.Private.TraverseAllChildren(self.data) do
           WeakAuras.GetDisplayButton(child.id):PriorityShow(2);
         end
+        self:PriorityShow(2)
       end
-
+      self:RecheckParentVisibility()
       OptionsPrivate.Private.ResumeAllDynamicGroups();
-    end
-
-    function self.callbacks.ViewTest()
-      local none, all = true, true;
-      for child in OptionsPrivate.Private.TraverseAllChildren(self.data) do
-        local childButton = WeakAuras.GetDisplayButton(child.id);
-        if(childButton) then
-          if(childButton:GetVisibility() ~= 2) then
-            all = false;
-          end
-          if(childButton:GetVisibility() ~= 0) then
-            none = false;
-          end
-        end
-      end
-      if(all) then
-        return 2;
-      elseif(none) then
-        return 0;
-      else
-        return 1;
-      end
     end
 
     function self.callbacks.OnRenameClick()
@@ -810,7 +793,7 @@ local methods = {
       if not self.dragging then return end
       local target, area = select(2, GetDropTarget())
       local action = GetAction(target, area)
-      OptionsPrivate.Drop(self.data, target, action)
+      OptionsPrivate.Drop(self.data, target, action, area)
     end
 
     function self.callbacks.OnKeyDown(self, key)
@@ -889,12 +872,12 @@ local methods = {
     });
 
     tinsert(self.menu, {
-      text = L["Export to string..."],
+      text = L["Export..."],
       notCheckable = true,
       func = function() OptionsPrivate.ExportToString(self.data.id) end
     });
     tinsert(self.menu, {
-      text = L["Export to Lua table..."],
+      text = L["Export debug table..."],
       notCheckable = true,
       func = function() OptionsPrivate.ExportToTable(self.data.id) end
     });
@@ -930,8 +913,6 @@ local methods = {
       func = function() WeakAuras_DropDownMenu:Hide() end
     });
     if(self.data.controlledChildren) then
-      self:SetViewClick(self.callbacks.OnViewClick);
-      self:SetViewTest(self.callbacks.ViewTest);
       self.loaded:Hide();
       self.expand:Show();
       self.callbacks.UpdateExpandButton();
@@ -958,6 +939,7 @@ local methods = {
     self.ungroup:SetScript("OnClick", self.callbacks.OnUngroupClick);
     self.upgroup:SetScript("OnClick", self.callbacks.OnUpGroupClick);
     self.downgroup:SetScript("OnClick", self.callbacks.OnDownGroupClick);
+    self.view:SetScript("OnClick", self.callbacks.OnViewClick);
 
     if self.data.parent then
       local parentData = WeakAuras.GetData(self.data.parent);
@@ -1083,7 +1065,7 @@ local methods = {
     if (WeakAuras.IsImporting()) then return end;
     local parentData = WeakAuras.GetData(self.data.parent);
     if not parentData then return end;
-    local index = Retail.tIndexOf(parentData.controlledChildren, self.data.id);
+    local index = tIndexOf(parentData.controlledChildren, self.data.id);
     if(index) then
       tremove(parentData.controlledChildren, index);
       WeakAuras.Add(parentData);
@@ -1095,7 +1077,7 @@ local methods = {
 
     local newParent = parentData.parent and WeakAuras.GetData(parentData.parent)
     if newParent then
-      local insertIndex = Retail.tIndexOf(newParent.controlledChildren, parentData.id)
+      local insertIndex = tIndexOf(newParent.controlledChildren, parentData.id)
       if not insertIndex then
         error("Parent Display thinks it is a member of a group which does not control it");
       end
@@ -1231,6 +1213,9 @@ local methods = {
     end
     self:DropEnd()
   end,
+  ["IsDragging"] = function(self)
+    return self.dragging
+  end,
   ["DragReset"] = function(self)
     self:DropEnd()
   end,
@@ -1296,20 +1281,6 @@ local methods = {
   end,
   ["SetViewRegion"] = function(self, region)
     self.view.region = region;
-    self.view.func = function() return self.view.visibility end;
-    self.view:SetScript("OnClick", function()
-      if(self.view.visibility < 2) then
-        self:PriorityShow(2);
-      else
-        self:PriorityHide(2);
-      end
-    end);
-  end,
-  ["SetViewClick"] = function(self, func)
-    self.view:SetScript("OnClick", func);
-  end,
-  ["SetViewTest"] = function(self, func)
-    self.view.func = func;
   end,
   ["SetRenameAction"] = function(self, func)
     self.renamebox.func = function()
@@ -1453,11 +1424,13 @@ local methods = {
   ["Pick"] = function(self)
     self.frame:LockHighlight();
     self:PriorityShow(1);
+    self:RecheckParentVisibility()
   end,
   ["ClearPick"] = function(self, noHide)
     self.frame:UnlockHighlight();
     if not noHide then
       self:PriorityHide(1);
+      self:RecheckParentVisibility()
     end
   end,
   ["SyncVisibility"] = function(self)
@@ -1509,21 +1482,51 @@ local methods = {
       self:UpdateViewTexture()
     end
   end,
-  ["UpdateViewTexture"] = function(self, priority)
-    local visibility = self.view.func()
+  ["RecheckParentVisibility"] = function(self)
+    if self.data.parent then
+      local parentButton = WeakAuras.GetDisplayButton(self.data.parent)
+      parentButton:RecheckVisibility()
+    else
+      WeakAuras.OptionsFrame().loadedButton:RecheckVisibility()
+      WeakAuras.OptionsFrame().unloadedButton:RecheckVisibility()
+    end
+  end,
+  ["RecheckVisibility"] = function(self)
+    local none, all = true, true;
+    for child in OptionsPrivate.Private.TraverseAllChildren(self.data) do
+      local childButton = WeakAuras.GetDisplayButton(child.id);
+      if(childButton) then
+        if(childButton:GetVisibility() ~= 2) then
+          all = false;
+        end
+        if(childButton:GetVisibility() ~= 0) then
+          none = false;
+        end
+      end
+    end
+    local newVisibility
+    if(all) then
+      newVisibility = 2;
+    elseif(none) then
+      newVisibility = 0;
+    else
+      newVisibility = 1;
+    end
+    if newVisibility ~= self.view.visibility then
+      self.view.visibility = newVisibility
+      self:UpdateViewTexture()
+
+      self:RecheckParentVisibility()
+    end
+  end,
+  ["UpdateViewTexture"] = function(self)
+    local visibility = self.view.visibility
     if(visibility == 2) then
       self.view.texture:SetTexture("Interface\\LFGFrame\\BattlenetWorking0.blp");
     elseif(visibility == 1) then
       self.view.texture:SetTexture("Interface\\LFGFrame\\BattlenetWorking2.blp");
     else
       self.view.texture:SetTexture("Interface\\LFGFrame\\BattlenetWorking4.blp");
-    end
-    if self.data.parent then
-      local parentButton = WeakAuras.GetDisplayButton(self.data.parent)
-      parentButton:UpdateViewTexture()
-    else
-      WeakAuras.OptionsFrame().loadedButton:UpdateViewTexture()
-      WeakAuras.OptionsFrame().unloadedButton:UpdateViewTexture()
     end
   end,
   ["GetVisibility"] = function(self)
@@ -1712,8 +1715,8 @@ local function Constructor()
   view:SetHighlightTexture("Interface\\BUTTONS\\UI-Panel-MinimizeButton-Highlight.blp");
   view:SetScript("OnEnter", function() Show_Tooltip(button, L["View"], L["Toggle the visibility of this display"]) end);
   view:SetScript("OnLeave", Hide_Tooltip);
+
   view.visibility = 0;
-  view.func = function() return view.visibility end;
 
   local loaded = CreateFrame("BUTTON", nil, button);
   button.loaded = loaded;

@@ -2462,6 +2462,8 @@ local function pAdd(data, simpleChange)
   if UIDtoID[data.uid] and UIDtoID[data.uid] ~= id then
     print("Improper? arguments to WeakAuras.Add - uid is assigned to a id. Uid:", data.uid, "assigned too:", UIDtoID[data.uid], "assigning now to", data.id)
   end
+
+
   local otherID = UIDtoID[data.uid]
   if not otherID then
     UIDtoID[data.uid] = id
