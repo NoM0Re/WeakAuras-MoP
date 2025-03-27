@@ -2640,7 +2640,6 @@ function WeakAuras.SetRegion(data, cloneId)
       else
         if((not regions[id]) or (not regions[id].region) or regions[id].regionType ~= regionType) then
           region = regionTypes[regionType].create(frame, data);
-          region.regionType = regionType;
           regions[id] = {
             regionType = regionType,
             region = region
