@@ -1,5 +1,6 @@
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, Private = ...
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local Private = select(2, ...)
 
 local SharedMedia = LibStub("LibSharedMedia-3.0");
 local L = WeakAuras.L;
@@ -13,7 +14,7 @@ local default = function(parentType)
     border_size = 2,
   }
   if parentType == "aurabar" then
-    options["border_anchor"] = "bar"
+    options["anchor_area"] = "bar"
   end
   return options
 end
@@ -34,7 +35,7 @@ local properties = {
 
 
 local function create()
-  local region = CreateFrame("FRAME", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
+  local region = CreateFrame("Frame", nil, UIParent)
   return region
 end
 
@@ -49,8 +50,6 @@ end
 local function modify(parent, region, parentData, data, first)
   region:SetParent(parent)
 
-  parent:AnchorSubRegion(region, "area", parentData.regionType == "aurabar" and data.border_anchor, nil, data.border_offset, data.border_offset)
-
   local edgeFile = SharedMedia:Fetch("border", data.border_edge)
   if edgeFile and edgeFile ~= "" then
     region:SetBackdrop({
@@ -58,7 +57,8 @@ local function modify(parent, region, parentData, data, first)
       edgeSize = data.border_size,
       bgFile = nil,
     })
-    region:SetBackdropBorderColor(data.border_color[1], data.border_color[2], data.border_color[3], data.border_color[4])
+    region:SetBackdropBorderColor(data.border_color[1], data.border_color[2],
+                                  data.border_color[3], data.border_color[4])
     region:SetBackdropColor(0, 0, 0, 0)
   end
 
@@ -66,9 +66,7 @@ local function modify(parent, region, parentData, data, first)
     self:SetBackdropBorderColor(r, g, b, a or 1)
   end
 
-  if data.border_color then
-    region:SetBorderColor(data.border_color[1], data.border_color[2], data.border_color[3], data.border_color[4]);
-  end
+  region:SetBorderColor(data.border_color[1], data.border_color[2], data.border_color[3], data.border_color[4]);
 
   function region:SetVisible(visible)
     if visible then
@@ -79,6 +77,11 @@ local function modify(parent, region, parentData, data, first)
   end
 
   region:SetVisible(data.border_visible)
+
+  region.Anchor = function()
+    parent:AnchorSubRegion(region, "area", parentData.regionType == "aurabar" and data.anchor_area or nil,
+                           nil, data.border_offset, data.border_offset)
+  end
 end
 
 local function supports(regionType)
@@ -86,6 +89,8 @@ local function supports(regionType)
          or regionType == "progresstexture"
          or regionType == "icon"
          or regionType == "aurabar"
+         or regionType == "empty"
 end
 
-WeakAuras.RegisterSubRegionType("subborder", L["Border"], supports, create, modify, onAcquire, onRelease, default, nil, properties);
+WeakAuras.RegisterSubRegionType("subborder", L["Border"], supports, create, modify, onAcquire, onRelease,
+                                default, nil, properties)

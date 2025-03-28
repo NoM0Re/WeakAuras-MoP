@@ -1,8 +1,8 @@
 <div align="center">
 
-# WeakAuras-MoP (5.4.8)
+# WeakAuras WotLK (3.3.5a)
 
-[![Discord](https://img.shields.io/discord/259362419372064778?style=flat&logo=discord&label=Discord)](https://discord.gg/UXSc7nt) [![Wiki](https://img.shields.io/badge/wiki-grey?style=flat&logo=github)](https://github.com/NoM0Re/WeakAuras-MoP/wiki) [![GitHub Issues](https://img.shields.io/github/issues/NoM0Re/WeakAuras-MoP)](https://github.com/NoM0Re/WeakAuras-MoP/issues) [![PayPal](https://img.shields.io/badge/Buy_me_a_coffee-100000?style=flat&logo=PayPal&logoColor=white&labelColor=3b7bbf&color=grey)](https://streamelements.com/noom0re/tip)
+[![Discord](https://img.shields.io/discord/259362419372064778?style=flat&logo=discord&label=Discord)](https://discord.gg/UXSc7nt) [![Wiki](https://img.shields.io/badge/wiki-grey?style=flat&logo=github)](https://github.com/NoM0Re/WeakAuras-WotLK/wiki) [![GitHub Issues](https://img.shields.io/github/issues/NoM0Re/WeakAuras-WotLK)](https://github.com/NoM0Re/WeakAuras-WotLK/issues) [![PayPal](https://img.shields.io/badge/Buy_me_a_coffee-100000?style=flat&logo=PayPal&logoColor=white&labelColor=3b7bbf&color=grey)](https://streamelements.com/noom0re/tip)
 
 ![Logo](https://i.imgur.com/wwbxeCG.jpeg)
 </div>
@@ -35,16 +35,16 @@ To open the options window, type `/wa` or `/weakauras` into your chat and hit en
 
 ## Documentation
 
-For in-depth documentation, see the [wiki](https://github.com/NoM0Re/WeakAuras-MoP/wiki) page.
+For in-depth documentation, see the [wiki](https://github.com/NoM0Re/WeakAuras-WotLK/wiki) page.
 
 ## Examples
 
-For some examples of what WeakAuras can do, take a look at [wago.io](https://wago.io/search/imports/wow/all?q=5.4.8) or [Stormforge](https://wa.stormforge.gg/) where tons of people upload their creations and even feature complete interfaces utilizing WeakAuras!
+For some examples of what WeakAuras can do, take a look at [wago.io](https://wago.io/search/imports/wow/all?q=3.3.5) where tons of people upload their creations and even feature complete interfaces utilizing WeakAuras!
 
 ## Problems
 
-* Please see the [wiki](https://github.com/NoM0Re/WeakAuras-MoP/wiki) page.
-* If you've discovered something that's clearly wrong, or if you get an error, please create a [ticket](https://github.com/NoM0Re/WeakAuras-MoP/issues).
+* Please see the [wiki](https://github.com/NoM0Re/WeakAuras-WotLK/wiki) page.
+* If you've discovered something that's clearly wrong, or if you get an error, please create a [ticket](https://github.com/NoM0Re/WeakAuras-WotLK/issues).
 * You're a programmer yourself and want to contribute? Check out our [contributing guidelines](CONTRIBUTING.md) to get started!
 * Feel free to join our [Discord Community](https://discord.gg/UXSc7nt) to talk, get help and discuss everything WeakAuras!
 

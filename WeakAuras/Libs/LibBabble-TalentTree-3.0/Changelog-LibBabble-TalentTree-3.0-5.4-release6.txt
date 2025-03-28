@@ -1,0 +1,13 @@
+------------------------------------------------------------------------
+r67 | nevcairiel | 2013-10-19 14:24:37 +0000 (Sat, 19 Oct 2013) | 1 line
+Changed paths:
+   A /tags/5.4-release6 (from /trunk:66)
+
+Weekly Tag - #6
+------------------------------------------------------------------------
+r66 | nevcairiel | 2013-10-19 14:23:29 +0000 (Sat, 19 Oct 2013) | 1 line
+Changed paths:
+   M /trunk/LibBabble-TalentTree-3.0.lua
+
+Automated LibBabble re-generation from the localization system
+------------------------------------------------------------------------

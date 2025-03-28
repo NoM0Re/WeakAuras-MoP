@@ -18,8 +18,9 @@ Imports an aura from a table, which may or may not be encoded as a B64 string.
 If target is installed data, or is a uid which points to installed data, then the import will be an update to that aura
 
 ]]--
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, Private = ...
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local Private = select(2, ...)
 
 -- Lua APIs
 local tinsert = table.insert
@@ -27,17 +28,11 @@ local tostring, string_char, strsplit = tostring, string.char, strsplit
 local pairs, type, unpack = pairs, type, unpack
 local error = error
 local bit_band, bit_lshift, bit_rshift = bit.band, bit.lshift, bit.rshift
-local coroutine = coroutine
 
 local WeakAuras = WeakAuras;
 local L = WeakAuras.L;
 
 local versionString = WeakAuras.versionString;
-
-local regionOptions = WeakAuras.regionOptions;
-local regionTypes = WeakAuras.regionTypes;
-
-local Retail = LibStub("LibRetail")
 
 -- Local functions
 local decodeB64, GenerateUniqueID
@@ -138,7 +133,8 @@ function CompressDisplay(data, version)
   end
 
   local copiedData = CopyTable(data)
-  local non_transmissable_fields = version >= 2000 and Private.non_transmissable_fields_v2000 or Private.non_transmissable_fields
+  local non_transmissable_fields = version >= 2000 and Private.non_transmissable_fields_v2000
+                                                       or Private.non_transmissable_fields
   stripNonTransmissableFields(copiedData, non_transmissable_fields)
   copiedData.tocversion = WeakAuras.BuildInfo
   return copiedData;
@@ -152,40 +148,32 @@ local function filterFunc(_, event, msg, player, l, cs, t, flag, channelId, ...)
   local newMsg = "";
   local remaining = msg;
   local done;
+  local anyLinkFound = false
   repeat
     local start, finish, characterName, displayName = remaining:find("%[WeakAuras: ([^%s]+) %- (.*)%]");
     if(characterName and displayName) then
       characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
       displayName = displayName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
       newMsg = newMsg..remaining:sub(1, start-1);
-      newMsg = newMsg.."|Hgarrmission:weakauras|h|cFF8800FF["..characterName.." |r|cFF8800FF- "..displayName.."]|h|r";
+      newMsg = newMsg.."|HBNplayer::weakauras|h|cFF8800FF["..characterName.." |r|cFF8800FF- "..displayName.."]|h|r";
       remaining = remaining:sub(finish + 1);
+      anyLinkFound = true
     else
+      newMsg = newMsg .. remaining
       done = true;
     end
   until(done)
-  if newMsg ~= "" then
-    local trimmedPlayer = Ambiguate(player, "none")
-    if event == "CHAT_MSG_WHISPER" and not UnitInRaid(trimmedPlayer) and not UnitInParty(trimmedPlayer) then -- XXX: Need a guild check
+  if anyLinkFound then
+    if event == "CHAT_MSG_WHISPER" and not UnitInRaid(player) and not UnitInParty(player) then -- XXX: Need a guild check
       local _, num = BNGetNumFriends()
       for i=1, num do
-        -- if C_BattleNet then -- introduced in 8.2.5 PTR
-        --   local toon = C_BattleNet.GetFriendNumGameAccounts(i)
-        --   for j=1, toon do
-        --     local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(i, j);
-        --     if gameAccountInfo.characterName == trimmedPlayer and gameAccountInfo.clientProgram == "WoW" then
-        --       return false, newMsg, player, l, cs, t, flag, channelId, ...; -- Player is a real id friend, allow it
-        --     end
-        --   end
-        -- else -- keep old method for 8.2 and Classic
-          local toon = BNGetNumFriendToons(i)
-          for j=1, toon do
-            local _, rName, rGame = BNGetFriendToonInfo(i, j)
-            if rName == trimmedPlayer and rGame == "WoW" then
-              return false, newMsg, player, l, cs, t, flag, channelId, ...; -- Player is a real id friend, allow it
-            end
+        local toon = BNGetNumFriendToons(i)
+        for j=1, toon do
+          local _, rName, rGame = BNGetFriendToonInfo(i, j)
+          if rName == player and rGame == "WoW" then
+            return false, newMsg, player, l, cs, t, flag, channelId, ...; -- Player is a real id friend, allow it
           end
-        -- end
+        end
       end
       return true -- Filter strangers
     else
@@ -207,8 +195,8 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_BN_WHISPER", filterFunc)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_BN_WHISPER_INFORM", filterFunc)
-ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT", filterFunc)
-ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_BATTLEGROUND", filterFunc)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_BATTLEGROUND_LEADER", filterFunc)
 
 local Compresser = LibStub:GetLibrary("LibCompress")
 local LibDeflate = LibStub:GetLibrary("LibDeflate")
@@ -224,8 +212,8 @@ local tooltipLoading;
 local receivedData;
 
 hooksecurefunc("SetItemRef", function(link, text)
-  if(link == "garrmission:weakauras") then
-    local _, _, characterName, displayName = text:find("|Hgarrmission:weakauras|h|cFF8800FF%[([^%s]+) |r|cFF8800FF%- (.*)%]|h");
+  if(link == "BNplayer::weakauras") then
+    local _, _, characterName, displayName = text:find("|HBNplayer::weakauras|h|cFF8800FF%[([^%s]+) |r|cFF8800FF%- ([^%]]+)%]|h");
     if(characterName and displayName) then
       characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
       displayName = displayName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "");
@@ -319,18 +307,23 @@ function StringToTable(inString, fromChat)
   end
 
   if not decoded then
-    return "Error decoding."
+    return L["Error decoding."]
   end
 
-  local decompressed, errorMsg = nil, "unknown compression method"
+  local decompressed
   if encodeVersion > 0 then
     decompressed = LibDeflate:DecompressDeflate(decoded)
+    if not(decompressed) then
+      return L["Error decompressing"]
+    end
   else
-    decompressed, errorMsg = Compresser:Decompress(decoded)
+    -- We ignore the error message, since it's more likely not a weakaura.
+    decompressed = Compresser:Decompress(decoded)
+    if not(decompressed) then
+      return L["Error decompressing. This doesn't look like a WeakAuras import."]
+    end
   end
-  if not(decompressed) then
-    return "Error decompressing: " .. errorMsg
-  end
+
 
   local success, deserialized
   if encodeVersion < 2 then
@@ -339,7 +332,7 @@ function StringToTable(inString, fromChat)
     success, deserialized = LibSerialize:Deserialize(decompressed)
   end
   if not(success) then
-    return "Error deserializing "..deserialized
+    return L["Error deserializing"]
   end
   return deserialized
 end
@@ -386,8 +379,60 @@ function Private.DisplayToString(id, forChat)
   end
 end
 
-local function recurseStringify(data, level, lines)
-  for k, v in pairs(data) do
+local orderedPairs
+do
+  local function __genOrderedIndex(t)
+    local orderedIndex = {}
+    for key in pairs(t) do
+      if key ~= "__orderedIndex" then
+        table.insert(orderedIndex, key)
+      end
+    end
+    table.sort(orderedIndex, function(a, b)
+      local typeA, typeB = type(a), type(b)
+      if typeA ~= typeB then
+        return typeA < typeB
+      else
+        return a < b
+      end
+    end)
+    return orderedIndex
+  end
+
+  local function orderedNext(t, state)
+    -- Equivalent of the next function, but returns the keys in the alphabetic
+    -- order. We use a temporary ordered key table that is stored in the
+    -- table being iterated.
+    local key = nil
+    if state == nil then
+      -- the first time, generate the index
+      t.__orderedIndex = __genOrderedIndex(t)
+      key = t.__orderedIndex[1]
+    else
+      -- fetch the next value
+      for i = 1, table.getn(t.__orderedIndex) do
+        if t.__orderedIndex[i] == state then
+          key = t.__orderedIndex[i+1]
+        end
+      end
+    end
+
+    if key then
+      return key, t[key]
+    end
+
+    -- no more value to return, cleanup
+    t.__orderedIndex = nil
+  end
+
+  function orderedPairs(t)
+    return orderedNext, t, nil
+  end
+end
+
+local function recurseStringify(data, level, lines, sorted)
+  local pairsFn = sorted and orderedPairs or pairs
+  for k, v in pairsFn(data) do
     local lineFormat = strrep("    ", level) .. "[%s] = %s"
     local form1, form2, value
     local kType, vType = type(k), type(v)
@@ -410,7 +455,7 @@ local function recurseStringify(data, level, lines)
     lineFormat = lineFormat:format(form1, form2)
     if vType == "table" then
       tinsert(lines, lineFormat:format(k, "{"))
-      recurseStringify(v, level + 1, lines)
+      recurseStringify(v, level + 1, lines, sorted)
       tinsert(lines, strrep("    ", level) .. "},")
     else
       tinsert(lines, lineFormat:format(k, v) .. ",")
@@ -418,16 +463,16 @@ local function recurseStringify(data, level, lines)
   end
 end
 
-function Private.DataToString(id)
+function Private.DataToString(id, sorted)
   local data = WeakAuras.GetData(id)
   if data then
-    return Private.SerializeTable(data):gsub("|", "||")
+    return Private.SerializeTable(data, sorted):gsub("|", "||")
   end
 end
 
-function Private.SerializeTable(data)
+function Private.SerializeTable(data, sorted)
   local lines = {"{"}
-  recurseStringify(data, 1, lines)
+  recurseStringify(data, 1, lines, sorted)
   tinsert(lines, "}")
   return table.concat(lines, "\n")
 end
@@ -449,16 +494,16 @@ function ShowTooltip(lines)
   ItemRefTooltip:Show()
 end
 
-local delayedImport = CreateFrame("FRAME")
+local delayedImport = CreateFrame("Frame")
 
-local function ImportNow(data, children, target, sender)
+local function ImportNow(data, children, target, linkedAuras, sender, callbackFunc)
   if InCombatLockdown() then
     WeakAuras.prettyPrint(L["Importing will start after combat ends."])
 
     delayedImport:RegisterEvent("PLAYER_REGEN_ENABLED")
     delayedImport:SetScript("OnEvent", function()
       delayedImport:UnregisterEvent("PLAYER_REGEN_ENABLED")
-      ImportNow(data, children, target, sender)
+      ImportNow(data, children, target, linkedAuras, sender, callbackFunc)
     end)
     return
   end
@@ -467,11 +512,11 @@ local function ImportNow(data, children, target, sender)
     if not WeakAuras.IsOptionsOpen() then
       WeakAuras.OpenOptions()
     end
-    Private.OpenUpdate(data, children, target, sender)
+    Private.OpenUpdate(data, children, target, linkedAuras, sender, callbackFunc)
   end
 end
 
-function WeakAuras.Import(inData, target)
+function WeakAuras.Import(inData, target, callbackFunc, linkedAuras)
   local data, children, version
   if type(inData) == 'string' then
     -- encoded data
@@ -497,6 +542,20 @@ function WeakAuras.Import(inData, target)
     return nil, "Invalid import data."
   end
 
+  --[[
+  local highestVersion = data.internalVersion or 0
+  if children then
+    for _, child in ipairs(children) do
+      highestVersion = max(highestVersion, child.internalVersion or 0)
+    end
+  end
+  if highestVersion > WeakAuras.InternalVersion() then
+    -- Do not run PreAdd but still show Import Window
+    tooltipLoading = nil;
+    return ImportNow(data, children, target, linkedAuras, nil, callbackFunc)
+  end
+  ]]
+
   if version < 2000 then
     if children then
       data.controlledChildren = {}
@@ -507,7 +566,6 @@ function WeakAuras.Import(inData, target)
     end
   end
 
-  local status, msg = true, ""
   if type(target) ~= 'nil' then
     local uid = type(target) == 'table' and target.uid or target
     local targetData = Private.GetDataByUID(uid)
@@ -515,6 +573,9 @@ function WeakAuras.Import(inData, target)
       return false, "Invalid update target."
     else
       target = targetData
+    end
+    if data.uid and data.uid ~= target.uid then
+      return false, "Invalid update target, uids don't match."
     end
   end
   WeakAuras.PreAdd(data)
@@ -525,15 +586,14 @@ function WeakAuras.Import(inData, target)
   end
 
   tooltipLoading = nil;
-  return ImportNow(data, children, target)
+  return ImportNow(data, children, target, linkedAuras, nil, callbackFunc)
 end
-
--- backwards compatibility
-WeakAuras.ImportString = WeakAuras.Import
 
 local function crossRealmSendCommMessage(prefix, text, target, queueName, callbackFn, callbackArg)
   local chattype = "WHISPER"
-  if target and not UnitIsSameServer(target) then
+  --[[if target and not UnitIsSameServer(target) then
+  -- WORKAROUND https://github.com/Stanzilla/WoWUIBugs/issues/535, and use RAID/PARTY comms for connected realms
+  if target and (UnitRealmRelationship(target) or 0) ~= 1 then
     if UnitInRaid(target) then
       chattype = "RAID"
       text = ("§§%s:%s"):format(target, text)
@@ -541,14 +601,13 @@ local function crossRealmSendCommMessage(prefix, text, target, queueName, callba
       chattype = "PARTY"
       text = ("§§%s:%s"):format(target, text)
     end
-  end
+  end]]
   Comm:SendCommMessage(prefix, text, chattype, target, queueName, callbackFn, callbackArg)
 end
 
 local safeSenders = {}
 function RequestDisplay(characterName, displayName)
   safeSenders[characterName] = true
-  safeSenders[Ambiguate(characterName, "none")] = true
   local transmit = {
     m = "dR",
     d = displayName
@@ -581,7 +640,7 @@ Comm:RegisterComm("WeakAurasProg", function(prefix, message, distribution, sende
     local dest, msg = string.match(message, "^§§(.+):(.+)$")
     if dest then
       local dName, dServer = string.match(dest, "^(.*)-(.*)$")
-      local myName, myServer = UnitFullName("player")
+      local myName, myServer = UnitName("player")
       if myName == dName and myServer == dServer then
         message = msg
       else
@@ -611,7 +670,7 @@ Comm:RegisterComm("WeakAuras", function(prefix, message, distribution, sender)
     local dest, msg = string.match(message, "^§§([^:]+):(.+)$")
     if dest then
       local dName, dServer = string.match(dest, "^(.*)-(.*)$")
-      local myName, myServer = UnitFullName("player")
+      local myName, myServer = UnitName("player")
       if myName == dName and myServer == dServer then
         message = msg
       else
@@ -657,7 +716,7 @@ Comm:RegisterComm("WeakAuras", function(prefix, message, distribution, sender)
       end
 
       ItemRefTooltip:Hide()
-      ImportNow(data, children, nil, sender)
+      ImportNow(data, children, nil, nil, sender)
     elseif(received.m == "dR") then
       if(Private.linked and Private.linked[received.d] and Private.linked[received.d] > GetTime() - linkValidityDuration) then
         TransmitDisplay(received.d, sender);

@@ -1,5 +1,6 @@
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, Private = ...
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local Private = select(2, ...)
 
 local SharedMedia = LibStub("LibSharedMedia-3.0");
 
@@ -22,20 +23,22 @@ local default = {
   scale = 1,
 };
 
+Private.regionPrototype.AddAlphaToDefault(default);
+
 -- Called when first creating a new region/display
 local function create(parent)
   -- Main region
-  local region = CreateFrame("FRAME", nil, parent);
+  local region = CreateFrame("Frame", nil, parent);
   region.regionType = "group"
   region:SetMovable(true);
   region:SetWidth(2);
   region:SetHeight(2);
 
   -- Border region
-  local border = CreateFrame("frame", nil, region, BackdropTemplateMixin and "BackdropTemplate")
+  local border = CreateFrame("Frame", nil, region);
   region.border = border;
 
-  WeakAuras.regionPrototype.create(region);
+  Private.regionPrototype.create(region);
 
   local oldSetFrameLevel = region.SetFrameLevel
   region.SetFrameLevel = function(self, level)
@@ -90,29 +93,35 @@ local function modify(parent, region, data)
   else
     data.selfPoint = "CENTER";
   end
-  WeakAuras.regionPrototype.modify(parent, region, data);
+  Private.regionPrototype.modify(parent, region, data);
   -- Localize
   local border = region.border;
 
   -- Scale
   region:SetScale(data.scale and data.scale > 0 and data.scale <= 10 and data.scale or 1)
 
-  -- Get overall bounding box
-  local leftest, rightest, lowest, highest = 0, 0, 0, 0;
-  for child in Private.TraverseLeafs(data) do
-    local childRegion = WeakAuras.GetRegion(child.id)
-    if(child) then
-      local blx, bly, trx, try = getRect(child, childRegion);
-      leftest = math.min(leftest, blx);
-      rightest = math.max(rightest, trx);
-      lowest = math.min(lowest, bly);
-      highest = math.max(highest, try);
+  region.GetBoundingRect = function(self)
+    if not self.boundingRect then
+      local leftest, rightest, lowest, highest = 0, 0, 0, 0;
+      for child in Private.TraverseLeafs(data) do
+        local childRegion = WeakAuras.GetRegion(child.id)
+        if(child) then
+          local blx, bly, trx, try = getRect(child, childRegion);
+          leftest = math.min(leftest, blx);
+          rightest = math.max(rightest, trx);
+          lowest = math.min(lowest, bly);
+          highest = math.max(highest, try);
+        end
+      end
+      self.blx = leftest
+      self.bly = lowest
+      self.trx = rightest
+      self.try = highest
+      self.boundingRect = true
     end
+    return self.blx, self.bly, self.trx, self.try
   end
-  region.blx = leftest;
-  region.bly = lowest;
-  region.trx = rightest;
-  region.try = highest;
+  region.boundingRect = false
 
   -- Adjust frame-level sorting
   Private.FixGroupChildrenOrderForGroup(data);
@@ -125,6 +134,7 @@ local function modify(parent, region, data)
       break;
     end
   end
+
   if not hasDynamicSubGroups then
     -- Control children (does not happen with "group")
     function region:UpdateBorder(childRegion)
@@ -133,10 +143,11 @@ local function modify(parent, region, data)
       if data.border then
         -- Initial visibility (of child that originated UpdateBorder(...))
         local childVisible = childRegion and childRegion.toShow or false;
+
         -- Scan children for visibility
         if not childVisible then
           for child in Private.TraverseLeafs(data) do
-            local childRegion = WeakAuras.regions[child.id] and WeakAuras.regions[child.id].region;
+            local childRegion = Private.regions[child.id] and Private.regions[child.id].region;
             if childRegion and childRegion.toShow then
               childVisible = true;
               break;
@@ -146,6 +157,8 @@ local function modify(parent, region, data)
 
         -- Show border if child is visible
         if childVisible then
+          local blx, bly, trx, try = self:GetBoundingRect()
+
           border:SetBackdrop({
             edgeFile = data.borderEdge ~= "None" and SharedMedia:Fetch("border", data.borderEdge) or "",
             edgeSize = data.borderSize,
@@ -159,9 +172,10 @@ local function modify(parent, region, data)
           });
           border:SetBackdropBorderColor(data.borderColor[1], data.borderColor[2], data.borderColor[3], data.borderColor[4]);
           border:SetBackdropColor(data.backdropColor[1], data.backdropColor[2], data.backdropColor[3], data.backdropColor[4]);
+
           border:ClearAllPoints();
-          border:SetPoint("bottomleft", region, "bottomleft", leftest-data.borderOffset, lowest-data.borderOffset);
-          border:SetPoint("topright",   region, "topright",   rightest+data.borderOffset, highest+data.borderOffset);
+          border:SetPoint("bottomleft", region, "bottomleft", blx - data.borderOffset, bly - data.borderOffset);
+          border:SetPoint("topright",   region, "topright",   trx + data.borderOffset, try + data.borderOffset);
           border:Show();
         else
           border:Hide();
@@ -176,8 +190,8 @@ local function modify(parent, region, data)
     region.border:Hide()
   end
 
-  WeakAuras.regionPrototype.modifyFinish(parent, region, data);
+  Private.regionPrototype.modifyFinish(parent, region, data);
 end
 
 -- Register new region type with WeakAuras
-WeakAuras.RegisterRegionType("group", create, modify, default);
+Private.RegisterRegionType("group", create, modify, default);

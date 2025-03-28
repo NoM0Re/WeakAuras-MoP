@@ -1,5 +1,6 @@
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, OptionsPrivate = ...
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local OptionsPrivate = select(2, ...)
 
 -- Lua APIs
 local pairs = pairs
@@ -58,18 +59,13 @@ local colorScheme = {
 local function ConstructCodeReview(frame)
   local group = AceGUI:Create("WeakAurasInlineGroup");
   group.frame:SetParent(frame);
-  group.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -16);
-  group.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 46);
+  group.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 17, -63);
+  group.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -17, 46);
   group.frame:Hide();
   group:SetLayout("flow");
 
-  local title = AceGUI:Create("Label")
-  title:SetFontObject(GameFontNormalHuge)
-  title:SetFullWidth(true)
-  title:SetText(L["Custom Code Viewer"])
-  group:AddChild(title)
-
   local codeTree = AceGUI:Create("TreeGroup");
+  codeTree:SetTreeWidth(300, false)
   codeTree:SetFullWidth(true)
   codeTree:SetFullHeight(true)
   codeTree:SetLayout("flow")
@@ -118,7 +114,6 @@ local function ConstructCodeReview(frame)
     self.codeTree:SetTree(data);
     self.codeTree:SelectByValue(firstEntry.value)
 
-    WeakAuras.ShowOptions();
     frame.window = "codereview";
     frame:UpdateFrameVisible()
   end

@@ -1,0 +1,63 @@
+if not WeakAuras.IsLibsOK() then return end
+
+local AddonName = ...
+local Private = select(2, ...)
+
+Private.DiscordList = {
+  [=[007bb]=],
+  [=[AcidWeb]=],
+  [=[aelen]=],
+  [=[Aishuu]=],
+  [=[Ariani  Continuity]=],
+  [=[Azortharion]=],
+  [=[BadBrain]=],
+  [=[Bart]=],
+  [=[Boneshock]=],
+  [=[Boxthor]=],
+  [=[Burlis]=],
+  [=[Causese]=],
+  [=[Chab]=],
+  [=[Darian]=],
+  [=[Desik]=],
+  [=[DjinnFish]=],
+  [=[exality]=],
+  [=[Fatpala]=],
+  [=[Fels]=],
+  [=[Fenchurch]=],
+  [=[Guffin]=],
+  [=[Ifor]=],
+  [=[Ipwnturkeys]=],
+  [=[Ironi]=],
+  [=[Jods]=],
+  [=[kanegasi]=],
+  [=[Koxy]=],
+  [=[Leezy]=],
+  [=[Listefano]=],
+  [=[Luckyone]=],
+  [=[Luxthos]=],
+  [=[m33shoq]=],
+  [=[Manabanana]=],
+  [=[MetalMusicMan]=],
+  [=[Murph]=],
+  [=[Mynze]=],
+  [=[Nona]=],
+  [=[NostraDumAzz]=],
+  [=[Oi]=],
+  [=[Ora]=],
+  [=[ParkSaeRoyi]=],
+  [=[phoenix7700]=],
+  [=[Raysur]=],
+  [=[reggie]=],
+  [=[Reloe]=],
+  [=[Spaten]=],
+  [=[Tollo]=],
+  [=[Translit]=],
+  [=[update]=],
+  [=[vozochris]=],
+  [=[Wizeowel]=],
+  [=[Xepheris]=],
+}
+Private.DiscordListCJ = {
+}
+Private.DiscordListK = {
+}

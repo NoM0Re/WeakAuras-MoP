@@ -1,7 +1,7 @@
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, OptionsPrivate = ...
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local OptionsPrivate = select(2, ...)
 local L = WeakAuras.L
-local regionOptions = WeakAuras.regionOptions
 
 local flattenRegionOptions = OptionsPrivate.commonOptions.flattenRegionOptions
 local fixMetaOrders = OptionsPrivate.commonOptions.fixMetaOrders
@@ -90,8 +90,8 @@ function OptionsPrivate.GetDisplayOptions(data)
 
     local hasSubElements = false
 
-    if(regionOptions[data.regionType]) then
-      regionOption = regionOptions[data.regionType].create(id, data);
+    if(OptionsPrivate.Private.regionOptions[data.regionType]) then
+      regionOption = OptionsPrivate.Private.regionOptions[data.regionType].create(id, data);
 
       if data.subRegions then
         local subIndex = {}
@@ -102,6 +102,7 @@ function OptionsPrivate.GetDisplayOptions(data)
             subIndex[subRegionType] = subIndex[subRegionType] and subIndex[subRegionType] + 1 or 1
             local options, common = OptionsPrivate.Private.subRegionOptions[subRegionType].create(data, subRegionData, index, subIndex[subRegionType])
             options.__order = 200 + index
+            options.__collapsed = true
             regionOption["sub." .. index .. "." .. subRegionType] = options
             commonOption[subRegionType] = common
           end
@@ -150,6 +151,12 @@ function OptionsPrivate.GetDisplayOptions(data)
 
     local options = flattenRegionOptions(regionOption, true)
 
+    for _, option in pairs(options) do
+      if option.type == "range" then
+        option.control = "WeakAurasSpinBox"
+      end
+    end
+
     local region = {
       type = "group",
       name = L["Display"],
@@ -180,12 +187,7 @@ function OptionsPrivate.GetDisplayOptions(data)
         end
         WeakAuras.Add(data);
         WeakAuras.UpdateThumbnail(data);
-        if(data.parent) then
-          local parentData = WeakAuras.GetData(data.parent);
-          if(parentData) then
-            WeakAuras.Add(parentData);
-          end
-        end
+        OptionsPrivate.Private.AddParents(data)
         OptionsPrivate.ResetMoverSizer();
       end,
       args = options
@@ -209,8 +211,8 @@ function OptionsPrivate.GetDisplayOptions(data)
     for child in OptionsPrivate.Private.TraverseLeafs(data) do
       if child and not handledRegionTypes[child.regionType] then
         handledRegionTypes[child.regionType] = true;
-        if regionOptions[child.regionType] then
-          allOptions = union(allOptions, regionOptions[child.regionType].create(id, data));
+        if OptionsPrivate.Private.regionOptions[child.regionType] then
+          allOptions = union(allOptions, OptionsPrivate.Private.regionOptions[child.regionType].create(id, data));
         else
           unsupportedCount = unsupportedCount + 1
           allOptions["__unsupported" .. unsupportedCount] =  {

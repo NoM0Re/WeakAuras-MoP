@@ -1,18 +1,12 @@
 --[[-----------------------------------------------------------------------------
 Anchor for a Expandable section
 -------------------------------------------------------------------------------]]
-if not WeakAuras.IsCorrectVersion() then return end
-local AddonName, OptionsPrivate = ...
-local Type, Version = "WeakAurasExpandAnchor", 2
+if not WeakAuras.IsLibsOK() then return end
+local AddonName = ...
+local OptionsPrivate = select(2, ...)
+local Type, Version = "WeakAurasExpandAnchor", 3
 local AceGUI = LibStub and LibStub("AceGUI-3.0", true)
-
 if not AceGUI or (AceGUI:GetWidgetVersion(Type) or 0) >= Version then return end
-
--- Lua APIs
-local pairs = pairs
-
--- WoW APIs
-local CreateFrame, UIParent = CreateFrame, UIParent
 
 local methods = {
   ["OnAcquire"] = function(self)
