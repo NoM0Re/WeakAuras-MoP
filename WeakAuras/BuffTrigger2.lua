@@ -1871,7 +1871,7 @@ local function EventHandler(frame, event, arg1, arg2, ...)
     if arg1:sub(1, 9) == "nameplate" then
       RecheckActiveForUnitType("nameplate", arg1, deactivatedTriggerInfos)
     end
-  elseif event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
+  elseif event == "ENCOUNTER_START" or event == "ENCOUNTER_END" or event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
     for unit in GetAllUnits("boss", true) do
       RecheckActiveForUnitType("boss", unit, deactivatedTriggerInfos)
       if not UnitExistsFixed(unit) then
@@ -1885,7 +1885,7 @@ local function EventHandler(frame, event, arg1, arg2, ...)
         tinsert(unitsToRemove, unit)
       end
     end
-  elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+  elseif event == "GROUP_ROSTER_UPDATE" then
     for unit in GetAllUnits("group", true, "PlayersAndPets") do
       RecheckActiveForUnitType("group", unit, deactivatedTriggerInfos)
       local exists = UnitExistsFixed(unit)
@@ -1962,8 +1962,9 @@ Buff2Frame:RegisterEvent("ARENA_OPPONENT_UPDATE")
 Buff2Frame:RegisterEvent("UNIT_ENTERED_VEHICLE")
 Buff2Frame:RegisterEvent("UNIT_EXITED_VEHICLE")
 Buff2Frame:RegisterEvent("PLAYER_TARGET_CHANGED")
-Buff2Frame:RegisterEvent("PARTY_MEMBERS_CHANGED")
-Buff2Frame:RegisterEvent("RAID_ROSTER_UPDATE")
+Buff2Frame:RegisterEvent("ENCOUNTER_START")
+Buff2Frame:RegisterEvent("ENCOUNTER_END")
+Buff2Frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 Buff2Frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 if WeakAuras.isAwesomeEnabled() then
   Buff2Frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")

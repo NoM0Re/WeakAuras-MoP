@@ -15,7 +15,7 @@ local GetSpellInfo, GetItemInfo, GetItemCount, GetItemIcon = GetSpellInfo, GetIt
 local GetShapeshiftFormInfo, GetShapeshiftForm = GetShapeshiftFormInfo, GetShapeshiftForm
 local GetRuneCooldown, UnitCastingInfo, UnitChannelInfo = GetRuneCooldown, UnitCastingInfo, UnitChannelInfo
 local UnitDetailedThreatSituation = UnitDetailedThreatSituation
-local MAX_NUM_TALENTS = MAX_NUM_TALENTS or 40
+local MAX_NUM_TALENTS = MAX_NUM_TALENTS or 20
 local MONEY = MONEY
 
 local WeakAuras = WeakAuras
@@ -97,6 +97,79 @@ WeakAuras.UnitRaidRole = function(unit)
   if raidID then
     return select(10, GetRaidRosterInfo(raidID + 1)) or "NONE"
   end
+end
+
+local encounter_list = ""
+local zoneId_list = ""
+function Private.InitializeEncounterAndZoneLists()
+  if encounter_list ~= "" then
+    return
+  end
+
+  EJ_SelectTier(EJ_GetNumTiers())
+
+  for _, inRaid in ipairs({false, true}) do
+    local instance_index = 1
+    local instance_id = EJ_GetInstanceByIndex(instance_index, true)
+    local title = inRaid and L["Raids"] or L["Dungeons"]
+    zoneId_list = ("%s|cffffd200%s|r\n"):format(zoneId_list, title)
+
+    while instance_id do
+      EJ_SelectInstance(instance_id)
+      local instance_name, _, _, _, _, dungeonAreaMapID = EJ_GetInstanceInfo(instance_id)
+      local ej_index = 1
+      local boss, _, encounter_id  = EJ_GetEncounterInfoByIndex(ej_index)
+
+      zoneId_list = ("%s%s: %d\n"):format(zoneId_list, instance_name, dungeonAreaMapID)
+
+      -- Encounter ids
+      if inRaid then
+        while boss do
+          if encounter_id then
+            if instance_name then
+              encounter_list = ("%s|cffffd200%s|r\n"):format(encounter_list, instance_name)
+              instance_name = nil -- Only add it once per section
+            end
+            encounter_list = ("%s%s: %d\n"):format(encounter_list, boss, encounter_id)
+          end
+          ej_index = ej_index + 1
+          boss, _, encounter_id = EJ_GetEncounterInfoByIndex(ej_index, instance_id)
+        end
+        encounter_list = encounter_list .. "\n"
+      end
+
+      instance_index = instance_index + 1
+      instance_id = EJ_GetInstanceByIndex(instance_index, inRaid)
+    end
+    zoneId_list = zoneId_list .. "\n"
+  end
+
+  return encounter_list:sub(1, -3) .. "\n\n" .. L["Supports multiple entries, separated by commas\n"]
+end
+
+local function get_encounters_list()
+  return encounter_list
+end
+
+local function get_zoneId_list()
+  SetMapToCurrentZone()
+
+  local continent_id = GetCurrentMapContinent()
+  local zone_id = GetCurrentMapZone()
+  local map_area_id = GetCurrentMapAreaID()
+
+  local currentmap_name = GetMapInfo()
+  local currentmap_id = GetCurrentMapAreaID()
+  local currentmap_zone_name = ""
+
+  return ("%s|cffffd200%s|r%s: %d\n\n%s%s"):format(
+    zoneId_list,
+    L["Current Zone\n"],
+    currentmap_name,
+    currentmap_id,
+    currentmap_zone_name,
+    L["Supports multiple entries, separated by commas"]
+  )
 end
 
 function WeakAuras.SpellSchool(school)
@@ -802,6 +875,18 @@ function Private.ExecEnv.CheckCombatLogFlagsObjectType(flags, flagToCheck)
   return bit.band(flags, bitToCheck) ~= 0;
 end
 
+function Private.ExecEnv.CheckRaidFlags(flags, flagToCheck)
+  flagToCheck = tonumber(flagToCheck)
+  if not flagToCheck or not flags then return end --bailout
+  if flagToCheck == 0 then --no raid mark
+    return bit.band(flags, COMBATLOG_OBJECT_RAIDTARGET_MASK) == 0
+  elseif flagToCheck == 9 then --any raid mark
+    return bit.band(flags, COMBATLOG_OBJECT_RAIDTARGET_MASK) > 0
+  else -- specific raid mark
+    return bit.band(flags, _G['COMBATLOG_OBJECT_RAIDTARGET'..flagToCheck]) > 0
+  end
+end
+
 function WeakAuras.SpecForUnit(unit)
   local spec = WeakAuras.LGT:GetUnitTalentSpec(unit)
   local class = select(2, UnitClass(unit))
@@ -948,6 +1033,15 @@ Private.load_prototype = {
       events = {"PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST"}
     },
     {
+      name = "encounter",
+      display = L["In Encounter"],
+      type = "tristate",
+      width = WeakAuras.normalWidth,
+      init = "arg",
+      optional = true,
+      events = {"ENCOUNTER_START", "ENCOUNTER_END"}
+    },
+    {
       name = "pvpmode",
       display = L["PvP Mode Active"],
       type = "tristate",
@@ -957,13 +1051,22 @@ Private.load_prototype = {
       events = {"PLAYER_FLAGS_CHANGED", "UNIT_FACTION", "ZONE_CHANGED"}
     },
     {
+      name = "petbattle",
+      display = L["In Pet Battle"],
+      type = "tristate",
+      init = "arg",
+      width = WeakAuras.normalWidth,
+      optional = true,
+      events = {"PET_BATTLE_OPENING_START", "PET_BATTLE_CLOSE"}
+    },
+    {
       name = "vehicle",
       display = L["In Vehicle"],
       type = "tristate",
       init = "arg",
       width = WeakAuras.normalWidth,
       optional = true,
-      events = {"VEHICLE_UPDATE", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "UNIT_FLAGS"}
+      events = {"VEHICLE_UPDATE", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "UPDATE_OVERRIDE_ACTIONBAR", "UNIT_FLAGS"}
     },
     {
       name = "vehicleUi",
@@ -972,7 +1075,7 @@ Private.load_prototype = {
       init = "arg",
       width = WeakAuras.normalWidth,
       optional = true,
-      events = {"VEHICLE_UPDATE", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE"}
+      events = {"VEHICLE_UPDATE", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "UPDATE_OVERRIDE_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR"}
     },
     {
       name = "mounted",
@@ -1048,7 +1151,7 @@ Private.load_prototype = {
       type = "multiselect",
       values = "spec_types_all",
       test = "WeakAuras.CheckClassSpec(class, %s)",
-      events = {"UNIT_SPEC_CHANGED_player", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
+      events = {"PLAYER_TALENT_UPDATE"},
     },
     {
       name = "talent",
@@ -1057,7 +1160,7 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE", "SPELL_UPDATE_USABLE"},
+      events = {"PLAYER_TALENT_UPDATE"},
       inverse = nil,
       extraOption = nil,
       control = "WeakAurasMiniTalent",
@@ -1080,7 +1183,7 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE", "SPELL_UPDATE_USABLE"},
+      events = {"PLAYER_TALENT_UPDATE"},
       inverse = nil,
       extraOption = nil,
       control = "WeakAurasMiniTalent",
@@ -1107,7 +1210,7 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE", "SPELL_UPDATE_USABLE"},
+      events = {"PLAYER_TALENT_UPDATE"},
       inverse = nil,
       extraOption = nil,
       control = "WeakAurasMiniTalent",
@@ -1174,9 +1277,9 @@ Private.load_prototype = {
       type = "multiselect",
       values = "role_types",
       init = "arg",
-      events = {"PLAYER_TALENT_UPDATE", "PLAYER_ROLES_ASSIGNED", "SPELL_UPDATE_USABLE", "WA_DELAYED_PLAYER_ENTERING_WORLD"}
+      events = {"PLAYER_ROLES_ASSIGNED", "PLAYER_TALENT_UPDATE"}
     },
-    {
+    --[[{
       name = "spec_position",
       display = WeakAuras.newFeatureString .. L["Spec Position"],
       type = "multiselect",
@@ -1191,7 +1294,7 @@ Private.load_prototype = {
       values = "raid_role_types",
       init = "arg",
       events = {"PLAYER_ROLES_ASSIGNED"}
-    },
+    },]]
     {
       name = "ingroup",
       display = L["Group Type"],
@@ -1199,7 +1302,7 @@ Private.load_prototype = {
       width = WeakAuras.normalWidth,
       init = "arg",
       values = "group_types",
-      events = {"PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE"},
+      events = {"GROUP_ROSTER_UPDATE"},
       optional = true,
     },
     {
@@ -1207,7 +1310,7 @@ Private.load_prototype = {
       display = L["Group Size"],
       type = "number",
       init = "arg",
-      events = {"PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE"},
+      events = {"GROUP_ROSTER_UPDATE"},
       multiEntry = {
         operator = "and",
         limit = 2
@@ -1245,16 +1348,33 @@ Private.load_prototype = {
     },
     {
       name = "zoneId",
+      hidden = true,
+      init = "arg",
+      test = "true",
+    },
+    {
+      name = "zonegroupId",
+      hidden = true,
+      init = "arg",
+      test = "true",
+    },
+    {
+      name = "zoneIds",
       display = L["Zone ID(s)"],
       type = "string",
-      multiline = true,
+      events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE"},
+      desc = get_zoneId_list,
+      preamble = "local zoneChecker = WeakAuras.ParseZoneCheck(%q)",
+      test = "zoneChecker:Check(zoneId, zonegroupId)"
+    },
+    {
+      name = "encounterid",
+      display = L["Encounter ID(s)"],
+      type = "string",
       init = "arg",
-      test = "WeakAuras.CheckNumericIds(%q, zoneId)",
-      events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD" },
-      desc = function()
-	    return ("\n|cffffd200%s|r%s: %d\n\n%s"):format(L["Current Zone\n"], GetRealZoneText(), GetCurrentMapAreaID(), L["Supports multiple entries, separated by commas. Prefix with '-' for negation."])
-	    end,
-      optional = true,
+      desc = get_encounters_list,
+      test = "WeakAuras.CheckNumericIds(%q, encounterid)",
+      events = {"ENCOUNTER_START", "ENCOUNTER_END"}
     },
     {
       name = "subzone",
@@ -1285,9 +1405,18 @@ Private.load_prototype = {
       display = L["Instance Difficulty"],
       type = "multiselect",
       values = "difficulty_types",
-      sorted = true,
       init = "arg",
       events = {"PLAYER_DIFFICULTY_CHANGED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "WA_DELAYED_PLAYER_ENTERING_WORLD" },
+      optional = true,
+    },
+    {
+      name = "instance_type",
+      display = L["Instance Type"],
+      type = "multiselect",
+      values = "instance_difficulty_types",
+      sorted = true,
+      init = "arg",
+      events = {"PLAYER_DIFFICULTY_CHANGED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA"},
       optional = true,
     },
     {
@@ -1315,6 +1444,32 @@ Private.load_prototype = {
       },
       test = "not IsEquippedItem(GetItemInfo(%s) or '')",
       events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"}
+    },
+    {
+      name = "item_bonusid_equipped",
+      display =  WeakAuras.newFeatureString .. L["Item Bonus Id Equipped"],
+      type = "string",
+      test = "WeakAuras.CheckForItemBonusId(%q)",
+      events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"},
+      enable = false,
+      hidden = true,
+      desc = function()
+        return WeakAuras.GetLegendariesBonusIds()
+               .. "\n\n" .. L["Supports multiple entries, separated by commas"]
+      end
+    },
+    {
+      name = "not_item_bonusid_equipped",
+      display =  WeakAuras.newFeatureString .. L["|cFFFF0000Not|r Item Bonus Id Equipped"],
+      type = "string",
+      test = "not WeakAuras.CheckForItemBonusId(%q)",
+      events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"},
+      enable = false,
+      hidden = true,
+      desc = function()
+        return WeakAuras.GetLegendariesBonusIds()
+               .. "\n\n" .. L["Supports multiple entries, separated by commas"]
+      end
     },
   }
 };
@@ -2768,6 +2923,7 @@ Private.event_prototypes = {
     args = {
       {}, -- timestamp ignored with _ argument
       {}, -- messageType ignored with _ argument (it is checked before the dynamic function)
+      {}, -- hideCaster ignored with _ argument
       {
         type = "header",
         name = "sourceHeader",
@@ -2870,6 +3026,37 @@ Private.event_prototypes = {
             return Private.ExecEnv.CheckCombatLogFlagsObjectType(state.sourceFlags, needle) == (op == "==")
           end
         end
+      },
+      {
+        name = "sourceRaidFlags",
+        display = L["Source Raid Mark"],
+        type = "select",
+        values = "combatlog_raid_mark_check_type",
+        init = "arg",
+        store = true,
+        test = "Private.ExecEnv.CheckRaidFlags(sourceRaidFlags, %q)",
+        conditionType = "select",
+        conditionTest = function(state, needle, op)
+          if state and state.show then
+            return Private.ExecEnv.CheckRaidFlags(state.sourceRaidFlags, needle) == (op == "==")
+          end
+        end
+      },
+      {
+        name = "sourceRaidMarkIndex",
+        display = WeakAuras.newFeatureString .. L["Source unit's raid mark index"],
+        init = "WeakAuras.RaidFlagToIndex(sourceRaidFlags)",
+        test = "true",
+        store = true,
+        hidden = true,
+      },
+      {
+        name = "sourceRaidMark",
+        display = WeakAuras.newFeatureString .. L["Source unit's raid mark texture"],
+        test = "true",
+        init = "sourceRaidMarkIndex > 0 and '{rt'..sourceRaidMarkIndex..'}' or ''",
+        store = true,
+        hidden = true,
       },
       {
         type = "header",
@@ -3000,6 +3187,51 @@ Private.event_prototypes = {
         end,
       },
       {
+        name = "destRaidFlags",
+        display = L["Dest Raid Mark"],
+        type = "select",
+        values = "combatlog_raid_mark_check_type",
+        init = "arg",
+        store = true,
+        test = "Private.ExecEnv.CheckRaidFlags(destRaidFlags, %q)",
+        conditionType = "select",
+        conditionTest = function(state, needle, op)
+          if state and state.show then
+            return Private.ExecEnv.CheckRaidFlags(state.destRaidFlags, needle) == (op == "==")
+          end
+        end,
+        enable = function(trigger)
+          return not (trigger.subeventPrefix == "SPELL" and trigger.subeventSuffix == "_CAST_START");
+        end,
+      },
+      { -- destRaidFlags ignore for SPELL_CAST_START
+        enable = function(trigger)
+          return (trigger.subeventPrefix == "SPELL" and trigger.subeventSuffix == "_CAST_START");
+        end
+      },
+      {
+        name = "destRaidMarkIndex",
+        display = WeakAuras.newFeatureString .. L["Destination unit's raid mark index"],
+        init = "WeakAuras.RaidFlagToIndex(destRaidFlags)",
+        test = "true",
+        store = true,
+        hidden = true,
+        enable = function(trigger)
+          return not (trigger.subeventPrefix == "SPELL" and trigger.subeventSuffix == "_CAST_START");
+        end,
+      },
+      {
+        name = "destRaidMark",
+        display = WeakAuras.newFeatureString .. L["Destination unit's raid mark texture"],
+        test = "true",
+        init = "destRaidMarkIndex > 0 and '{rt'..destRaidMarkIndex..'}' or ''",
+        store = true,
+        hidden = true,
+        enable = function(trigger)
+          return not (trigger.subeventPrefix == "SPELL" and trigger.subeventSuffix == "_CAST_START");
+        end,
+      },
+      {
         type = "header",
         name = "subeventHeader",
         display = L["Subevent Info"],
@@ -3011,7 +3243,8 @@ Private.event_prototypes = {
             or trigger.subeventPrefix:find("SPELL"))
 
             or trigger.subeventSuffix and (
-              trigger.subeventSuffix == "_INTERRUPT"
+              trigger.subeventSuffix == "_ABSORBED"
+              or trigger.subeventSuffix == "_INTERRUPT"
               or trigger.subeventSuffix == "_DISPEL"
               or trigger.subeventSuffix == "_DISPEL_FAILED"
               or trigger.subeventSuffix == "_STOLEN"
@@ -3107,11 +3340,31 @@ Private.event_prototypes = {
         store = true
       },
       {
+        enable = function(trigger)
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED")
+        end
+      }, -- source of absorb GUID ignored with SPELL_ABSORBED
+      {
+        enable = function(trigger)
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED")
+        end
+      }, -- source of absorb Name ignored with SPELL_ABSORBED
+      {
+        enable = function(trigger)
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED")
+        end
+      }, -- source of absorb Flags ignored with SPELL_ABSORBED
+      {
+        enable = function(trigger)
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED")
+        end
+      }, -- source of absorb Raid Flags ignored with SPELL_ABSORBED
+      {
         name = "extraSpellId",
         display = WeakAuras.newFeatureString .. L["Extra Spell Id"],
         init = "arg",
         enable = function(trigger)
-          return trigger.subeventSuffix and (trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED" or trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
         end,
         test = "GetSpellInfo(%q or '') == extraSpellName",
         type = "spell",
@@ -3127,14 +3380,14 @@ Private.event_prototypes = {
         noValidation = true,
         init = "arg",
         enable = function(trigger)
-          return trigger.subeventSuffix and (trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED" or trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
         end,
         store = true,
         conditionType = "string"
       },
       {
         enable = function(trigger)
-          return trigger.subeventSuffix and (trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
+          return trigger.subeventSuffix and (trigger.subeventSuffix == "_ABSORBED" or trigger.subeventSuffix == "_INTERRUPT" or trigger.subeventSuffix == "_DISPEL" or trigger.subeventSuffix == "_DISPEL_FAILED" or trigger.subeventSuffix == "_STOLEN" or trigger.subeventSuffix == "_AURA_BROKEN_SPELL")
         end
       }, -- extraSchool ignored with _ argument
       {
@@ -3155,7 +3408,7 @@ Private.event_prototypes = {
         type = "number",
         init = "arg",
         enable = function(trigger)
-          return trigger.subeventSuffix and trigger.subeventPrefix and (trigger.subeventSuffix == "_DAMAGE" or trigger.subeventSuffix == "_HEAL" or trigger.subeventSuffix == "_ENERGIZE" or trigger.subeventSuffix == "_DRAIN" or trigger.subeventSuffix == "_LEECH" or trigger.subeventPrefix:find("DAMAGE"))
+          return trigger.subeventSuffix and trigger.subeventPrefix and (trigger.subeventSuffix == "_ABSORBED" or trigger.subeventSuffix == "_DAMAGE" or trigger.subeventSuffix == "_HEAL" or trigger.subeventSuffix == "_ENERGIZE" or trigger.subeventSuffix == "_DRAIN" or trigger.subeventSuffix == "_LEECH" or trigger.subeventPrefix:find("DAMAGE"))
         end,
         store = true,
         conditionType = "number"
@@ -3249,6 +3502,19 @@ Private.event_prototypes = {
         init = "arg",
         enable = function(trigger)
           return trigger.subeventSuffix and trigger.subeventPrefix and (trigger.subeventSuffix == "_DAMAGE" or trigger.subeventPrefix == "DAMAGE_SHIELD" or trigger.subeventPrefix == "DAMAGE_SPLIT")
+        end,
+        store = true,
+        conditionType = "bool"
+      },
+      {
+        name = "isOffHand",
+        display = L["Is Off Hand"],
+        type = "tristate",
+        init = "arg",
+        enable = function(trigger)
+          return trigger.subeventSuffix and trigger.subeventPrefix and (
+                 trigger.subeventSuffix == "_DAMAGE" or trigger.subeventPrefix == "DAMAGE_SHIELD" or trigger.subeventPrefix == "DAMAGE_SPLIT"
+                 or trigger.subeventSuffix == "_MISSED" or trigger.subeventPrefix == "DAMAGE_SHIELD_MISSED")
         end,
         store = true,
         conditionType = "bool"
@@ -5735,6 +6001,78 @@ Private.event_prototypes = {
     timedrequired = true,
     progressType = "timed"
   },
+  ["Encounter Events"] = {
+    type = "event",
+    events = {
+      ["events"] = {
+        "ENCOUNTER_START",
+        "ENCOUNTER_END"
+      }
+    },
+    name = L["Entering/Leaving Encounter"],
+    args = {
+      {
+        name = "eventtype",
+        required = true,
+        display = L["Type"],
+        type = "select",
+        values = "encounter_event_type",
+        test = "event == %q",
+        reloadOptions = true
+      },
+      {
+        name = "encounterId",
+        display = L["Id"],
+        type = "string",
+        validate = WeakAuras.ValidateNumeric,
+        conditionType = "number",
+        store = true,
+        init = "arg"
+      },
+      {
+        name = "encounterName",
+        display = L["Name"],
+        type = "string",
+        conditionType = "string",
+        store = true,
+        init = "arg"
+      },
+      {
+        name = "difficulty",
+        display = L["Difficulty"],
+        type = "select",
+        values = "difficulty_types",
+        test = "%q == WeakAuras.InstanceDifficulty()",
+        conditionType = "select",
+        conditionTest = function(state, needle)
+          return WeakAuras.InstanceDifficulty() == needle
+        end,
+        store = true,
+        init = "arg"
+      },
+      {},
+      {
+        name = "success",
+        display = L["Success"],
+        type = "toggle",
+        conditionType = "bool",
+        enable = function(trigger)
+          return trigger.eventtype == "ENCOUNTER_END"
+        end,
+        store = true,
+        test = "success == 1",
+        conditionTest = function(state, needle)
+          return state and (state.success == needle)
+        end,
+        init = "arg"
+      }
+    },
+    statesParameter = "one",
+    countEvents = true,
+    delayEvents = true,
+    timedrequired = true,
+    progressType = "timed"
+  },
   ["Combat Events"] = {
     type = "event",
     events = {
@@ -7414,8 +7752,7 @@ Private.event_prototypes = {
         tinsert(pet_unit_events, "UNIT_HEALTH")
       end
       if trigger.use_ingroup ~= nil then
-        tinsert(events, "PARTY_MEMBERS_CHANGED")
-        tinsert(events, "RAID_ROSTER_UPDATE")
+        tinsert(events, "GROUP_ROSTER_UPDATE")
       end
 
       if trigger.use_instance_difficulty ~= nil
@@ -7532,7 +7869,7 @@ Private.event_prototypes = {
         type = "multiselect",
         values = "group_types",
         init = "Private.ExecEnv.GroupType()",
-        events = {"PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE"}
+        events = {"GROUP_ROSTER_UPDATE"}
       },
       {
         name = "instance_size",

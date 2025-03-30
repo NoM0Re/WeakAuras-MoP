@@ -26,7 +26,7 @@ local SendChatMessage, UnitInBattleground
 local GetTime, UpdateAddOnCPUUsage, GetFrameCPUUsage, debugprofilestop
   = GetTime, UpdateAddOnCPUUsage, GetFrameCPUUsage, debugprofilestop
 local GetNumTalentTabs, GetNumTalents, MAX_NUM_TALENTS
-  = GetNumTalentTabs, GetNumTalents, MAX_NUM_TALENTS or 40
+  = GetNumTalentTabs, GetNumTalents, MAX_NUM_TALENTS or 20
 local CreateFrame, IsShiftKeyDown, GetScreenWidth, GetScreenHeight, GetCursorPosition
   = CreateFrame, IsShiftKeyDown, GetScreenWidth, GetScreenHeight, GetCursorPosition
 local debugstack, GetSpellInfo = debugstack, GetSpellInfo
@@ -347,6 +347,7 @@ WeakAuras.UnitIsPet = function(unit)
 end
 
 local playerLevel = UnitLevel("player");
+local currentInstanceType = "none"
 
 -- Custom Action Functions, keyed on id, "init" / "start" / "finish"
 Private.customActionsFunctions = {};
@@ -1114,6 +1115,24 @@ function Private.LoginMessage()
   return loginMessage
 end
 
+local function CheckForPreviousEncounter()
+  if (UnitAffectingCombat ("player") or InCombatLockdown()) then
+    for i = 1, 10 do
+      if (UnitExists ("boss" .. i)) then
+        local guid = UnitGUID ("boss" .. i)
+        if (guid and db.CurrentEncounter.boss_guids [guid]) then
+          -- we are in the same encounter
+          WeakAuras.CurrentEncounter = db.CurrentEncounter
+          return true
+        end
+      end
+    end
+    db.CurrentEncounter = nil
+  else
+    db.CurrentEncounter = nil
+  end
+end
+
 function Private.Login(takeNewSnapshots)
   local loginThread = coroutine.create(function()
     Private.Pause();
@@ -1146,6 +1165,11 @@ function Private.Login(takeNewSnapshots)
     Private.AddMany(toAdd, takeNewSnapshots);
     coroutine.yield(1000);
 
+    -- check in case of a disconnect during an encounter.
+    if (db.CurrentEncounter) then
+      CheckForPreviousEncounter()
+    end
+    coroutine.yield(1000);
     Private.RegisterLoadEvents();
     coroutine.yield(10000);
     Private.Resume();
@@ -1209,6 +1233,7 @@ loadedFrame:SetScript("OnEvent", function(self, event, ...)
       db.migrationCutoff = db.migrationCutoff or 730
       db.historyCutoff = db.historyCutoff or 730
 
+      Private.UpdateCurrentInstanceType();
       Private.SyncParentChildRelationships();
       local isFirstUIDValidation = db.dbVersion == nil or db.dbVersion < 26;
       Private.ValidateUniqueDataIds(isFirstUIDValidation);
@@ -1258,11 +1283,16 @@ loadedFrame:SetScript("OnEvent", function(self, event, ...)
         if remainingSquelch > 0 then
           timer:ScheduleTimer(function() squelch_actions = false; end, remainingSquelch); -- No sounds while loading
         end
+        Private.CreateTalentCache() -- It seems that GetTalentInfo might give info about whatever class was previously being played, until PLAYER_ENTERING_WORLD
+        Private.UpdateCurrentInstanceType();
+        Private.InitializeEncounterAndZoneLists()
       end
       if not isInitialLogin then
         isInitialLogin = true
         Private.PostAddCompanion()
       end
+    elseif(event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "CHARACTER_POINTS_CHANGED" or event == "SPELLS_CHANGED") then
+      callback = Private.CreateTalentCache;
     elseif(event == "PLAYER_REGEN_ENABLED") then
       callback = function()
         if (queueshowooc) then
@@ -1338,6 +1368,51 @@ function Private.ResumeAllDynamicGroups(suspended)
   end
 end
 
+-- Encounter stuff
+local function StoreBossGUIDs()
+  Private.StartProfileSystem("boss_guids")
+  if (WeakAuras.CurrentEncounter and WeakAuras.CurrentEncounter.boss_guids) then
+    for i = 1, 10 do
+      if (UnitExists ("boss" .. i)) then
+        local guid = UnitGUID ("boss" .. i)
+        if (guid) then
+          WeakAuras.CurrentEncounter.boss_guids [guid] = true
+        end
+      end
+    end
+    db.CurrentEncounter = WeakAuras.CurrentEncounter
+  end
+  Private.StopProfileSystem("boss_guids")
+end
+
+local function DestroyEncounterTable()
+  if (WeakAuras.CurrentEncounter) then
+    wipe(WeakAuras.CurrentEncounter)
+  end
+  WeakAuras.CurrentEncounter = nil
+  db.CurrentEncounter = nil
+end
+
+local function CreateEncounterTable(encounter_id)
+  local _, _, _, _, _, _, _, instanceId = GetInstanceInfo()
+  WeakAuras.CurrentEncounter = {
+    id = encounter_id,
+    zone_id = instanceId,
+    boss_guids = {},
+  }
+  timer:ScheduleTimer(StoreBossGUIDs, 2)
+
+  return WeakAuras.CurrentEncounter
+end
+
+function Private.UpdateCurrentInstanceType(instanceType)
+  if (not IsInInstance()) then
+    currentInstanceType = "none"
+  else
+    currentInstanceType = instanceType or select (2, GetInstanceInfo())
+  end
+end
+
 local pausedOptionsProcessing = false;
 function Private.pauseOptionsProcessing(enable)
   pausedOptionsProcessing = enable;
@@ -1360,37 +1435,16 @@ end
 local function GetInstanceTypeAndSize()
   local size, difficulty
   local inInstance, Type = IsInInstance()
-  local _, instanceType, difficultyIndex, _, maxPlayers, playerDifficulty, isDynamicInstance = GetInstanceInfo()
-  if inInstance or instanceType ~= "none" then
-    local ZoneMapID = GetCurrentMapAreaID()
+  local _, instanceType, difficultyIndex, _, _, _, _, ZoneMapID = GetInstanceInfo()
+  if (inInstance) then
     size = Type
-    if Type == "raid" then
-      if maxPlayers == 10 then
-        size = "ten"
-      elseif maxPlayers == 20 then
-        size = "twenty"
-      elseif maxPlayers == 25 then
-        size = "twentyfive"
-      elseif maxPlayers == 40 then
-        size = "fortyman"
-      end
+    local difficultyInfo = Private.difficulty_info[difficultyIndex]
+    if difficultyInfo then
+      size, difficulty = difficultyInfo.size, difficultyInfo.difficulty
     end
-    if isDynamicInstance then
-      if playerDifficulty == 0 then
-        difficulty = "normal"
-      elseif playerDifficulty == 1 then
-        difficulty = "heroic"
-      end
-    else
-      if difficultyIndex == 1 or difficultyIndex == 2 then
-        difficulty = "normal"
-      elseif difficultyIndex == 3 or difficultyIndex == 4 then
-        difficulty = "heroic"
-      end
-    end
-    return size, difficulty, instanceType, ZoneMapID
+    return size, difficulty, instanceType, ZoneMapID, difficultyIndex
   end
-  return "none", "none", nil, nil
+  return "none", "none", nil, nil, nil
 end
 
 function WeakAuras.InstanceType()
@@ -1410,8 +1464,26 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
 
   toCheck = toCheck or loadEvents[event or "SCAN_ALL"]
 
+  -- PET_BATTLE_CLOSE fires twice at the end of a pet battle. IsInBattle evaluates to TRUE during the
+  -- first firing, and FALSE during the second. I am not sure if this check is necessary, but the
+  -- following IF statement limits the impact of the PET_BATTLE_CLOSE event to the second one.
+  if (event == "PET_BATTLE_CLOSE" and C_PetBattles.IsInBattle()) then return end
+
   if (event == "PLAYER_LEVEL_UP") then
     playerLevel = arg1;
+  end
+
+  -- encounter id stuff, we are holding the current combat id to further load checks.
+  -- there is three ways to unload: encounter_end / zone changed (hearthstone used) / reload or disconnect
+  -- regen_enabled isn't good due to combat drop abilities such invisibility, vanish, fake death, etc.
+  local encounter_id = WeakAuras.CurrentEncounter and WeakAuras.CurrentEncounter.id or 0
+
+  if (event == "ENCOUNTER_START") then
+    encounter_id = tonumber(arg1)
+    CreateEncounterTable(encounter_id)
+  elseif (event == "ENCOUNTER_END") then
+    encounter_id = 0
+    DestroyEncounterTable()
   end
 
   if toCheck == nil or next(toCheck) == nil then
@@ -1419,35 +1491,45 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
   end
 
   local player, realm, zone, subzone = UnitName("player"), GetRealmName(), GetRealZoneText(), GetSubZoneText();
+  local spec, specId, role = false, false, false
+  local inPetBattle, vehicle, vehicleUi = false, false, false
   local guild = GetGuildInfo("player")
   local _, race = UnitRace("player")
   local faction = UnitFactionGroup("player")
   local zoneId = GetCurrentMapAreaID()
-  local role = WeakAuras.LGT:GetUnitRole("player")
-  local raidRole = false;
-  local raidID = UnitInRaid("player")
-  if raidID then
-    raidRole = select(10, GetRaidRosterInfo(raidID + 1))
-  end
+  local zonegroupId = false
   local _, class = UnitClass("player");
 
   local inCombat = UnitAffectingCombat("player")
+  local inEncounter = encounter_id ~= 0;
   local alive = not UnitIsDeadOrGhost('player')
-  local pvp = UnitIsPVPFreeForAll("player") or UnitIsPVP("player")
-  local vehicle = UnitInVehicle("player") or UnitOnTaxi("player") or false
-  local vehicleUi = UnitHasVehicleUI("player") or false
+  local pvp = UnitIsPVPFreeForAll("player") or UnitIsPVP("player") or false
   local mounted = IsMounted() or false
 
-  local raidMemberType = 0
+  spec = GetSpecialization() or 0
+  specId = GetSpecializationInfo(spec)
+  role = select(6, GetSpecializationInfo(spec))
+  inPetBattle = C_PetBattles.IsInBattle()
+  vehicle = UnitInVehicle('player') or UnitOnTaxi('player') or false
+  vehicleUi = UnitHasVehicleUI('player') or HasOverrideActionBar() or HasVehicleActionBar() or false
 
+  local raidMemberType = 0
   if UnitIsGroupLeader("player") then
     raidMemberType = raidMemberType + 1
-
   elseif UnitIsRaidOfficer("player") then
     raidMemberType = raidMemberType + 2
   end
 
-  local size, difficulty, instanceType = GetInstanceTypeAndSize()
+  local size, difficulty, instanceType, ZoneMapID, difficultyIndex = GetInstanceTypeAndSize()
+  Private.UpdateCurrentInstanceType(instanceType)
+
+  if (WeakAuras.CurrentEncounter) then
+    if (ZoneMapID ~= WeakAuras.CurrentEncounter.zone_id and not inCombat) then
+      encounter_id = 0
+      DestroyEncounterTable()
+    end
+  end
+
   local group = Private.ExecEnv.GroupType()
   local groupSize = GetNumGroupMembers()
 
@@ -1462,8 +1544,8 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
     if (data and not data.controlledChildren) then
       local loadFunc = loadFuncs[id];
       local loadOpt = loadFuncsForOptions[id];
-      shouldBeLoaded = loadFunc and loadFunc("ScanForLoads_Auras", inCombat, alive, pvp, vehicle, vehicleUi, mounted, player, realm, guild, class, race, faction, playerLevel, role, role, raidRole, group, groupSize, raidMemberType, zone, zoneId, subzone, size, difficulty);
-      couldBeLoaded =  loadOpt and loadOpt("ScanForLoads_Auras",   inCombat, alive, pvp, vehicle, vehicleUi, mounted, player, realm, guild, class, race, faction, playerLevel, role, role, raidRole, group, groupSize, raidMemberType, zone, zoneId, subzone, size, difficulty);
+      shouldBeLoaded = loadFunc and loadFunc("ScanForLoads_Auras", inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, player, realm, guild, class, specId, race, faction, playerLevel, role, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
+      couldBeLoaded =  loadOpt and loadOpt("ScanForLoads_Auras",   inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, player, realm, guild, class, specId, race, faction, playerLevel, role, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
 
       if(shouldBeLoaded and not loaded[id]) then
         changed = changed + 1;
@@ -1540,13 +1622,18 @@ end
 local loadFrame = CreateFrame("Frame");
 Private.frames["Display Load Handling"] = loadFrame;
 
+loadFrame:RegisterEvent("ENCOUNTER_START");
+loadFrame:RegisterEvent("ENCOUNTER_END");
 loadFrame:RegisterEvent("PLAYER_TALENT_UPDATE");
-loadFrame:RegisterEvent("SPELL_UPDATE_USABLE");
 loadFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED");
+loadFrame:RegisterEvent("PET_BATTLE_OPENING_START");
+loadFrame:RegisterEvent("PET_BATTLE_CLOSE");
 loadFrame:RegisterEvent("VEHICLE_UPDATE");
-
-loadFrame:RegisterEvent("PARTY_MEMBERS_CHANGED");
-loadFrame:RegisterEvent("RAID_ROSTER_UPDATE");
+loadFrame:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR")
+loadFrame:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR");
+loadFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+loadFrame:RegisterEvent("CHALLENGE_MODE_START")
+loadFrame:RegisterEvent("GROUP_ROSTER_UPDATE");
 loadFrame:RegisterEvent("ZONE_CHANGED");
 loadFrame:RegisterEvent("ZONE_CHANGED_INDOORS");
 loadFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA");

@@ -6,9 +6,14 @@ local WeakAuras = WeakAuras;
 local L = WeakAuras.L;
 
 local LSM = LibStub("LibSharedMedia-3.0");
+local LibBabbleRace = LibStub("LibBabble-Race-3.0");
+local LBR_Locale = LibBabbleRace:GetUnstrictLookupTable()
+local LBR_Base = LibBabbleRace:GetBaseLookupTable();
 
 local wipe, tinsert = wipe, tinsert
 local GetNumShapeshiftForms, GetShapeshiftFormInfo = GetNumShapeshiftForms, GetShapeshiftFormInfo
+
+local MAX_NUM_TALENTS = MAX_NUM_TALENTS or 20
 
 local function WA_GetClassColor(classFilename)
   local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[classFilename]
@@ -61,10 +66,10 @@ Private.character_types = {
   npc = L["Non-player Character"]
 }
 
-Private.spec_position_types = {
+--[[Private.spec_position_types = {
   caster = L["Ranged"],
   melee = L["Melee"]
-}
+}]]
 
 Private.group_sort_types = {
   ascending = L["Ascending"],
@@ -1238,21 +1243,33 @@ Private.unit_threat_situation_types = {
 }
 
 WeakAuras.class_types = {}
-for i, class in ipairs(CLASS_SORT_ORDER) do
-  WeakAuras.class_types[class] = string.format("|c%s%s|r", WA_GetClassColor(class), LOCALIZED_CLASS_NAMES_MALE[class])
+WeakAuras.class_color_types = {}
+local C_S_O, R_C_C, L_C_N_M, F_C_C_C = _G.CLASS_SORT_ORDER, _G.RAID_CLASS_COLORS, _G.LOCALIZED_CLASS_NAMES_MALE, _G.FONT_COLOR_CODE_CLOSE
+do
+  for i,eClass in ipairs(C_S_O) do
+    WeakAuras.class_color_types[eClass] = "|c"..R_C_C[eClass].colorStr
+    WeakAuras.class_types[eClass] = WeakAuras.class_color_types[eClass]..L_C_N_M[eClass]..F_C_C_C
+  end
+end
+
+local function LBR(key)
+  return LBR_Locale[key] or LBR_Base[key]
 end
 
 WeakAuras.race_types = {
-  Human = "Human",
-  Orc = "Orc",
-  Dwarf = "Dwarf",
-  NightElf = "Night Elf",
-  Scourge = "Undead",
-  Tauren = "Tauren",
-  Gnome = "Gnome",
-  Troll = "Troll",
-  BloodElf = "Blood Elf",
-  Draenei = "Draenei",
+  Pandaren = LBR("Pandaren"),
+  Worgen = LBR("Worgen"),
+  Draenei = LBR("Draenei"),
+  Dwarf = LBR("Dwarf"),
+  Gnome = LBR("Gnome"),
+  Human = LBR("Human"),
+  NightElf = LBR("Night Elf"),
+  Goblin = LBR("Goblin"),
+  BloodElf = LBR("Blood Elf"),
+  Orc = LBR("Orc"),
+  Tauren = LBR("Tauren"),
+  Troll = LBR("Troll"),
+  Scourge = LBR("Undead"),
 }
 
 Private.faction_group = {
@@ -2454,14 +2471,60 @@ Private.anim_color_types = {
 
 Private.instance_types = {
   none = L["No Instance"],
+  scenario = L["Scenario"],
   party = L["5 Man Dungeon"],
   ten = L["10 Man Raid"],
   twenty = L["20 Man Raid"],
   twentyfive = L["25 Man Raid"],
   fortyman = L["40 Man Raid"],
+  flexible = L["Flex Raid"],
   pvp = L["Battleground"],
   arena = L["Arena"]
 }
+
+Private.instance_difficulty_types = {
+
+}
+
+-- Fill out instance_difficulty_types automatically.
+-- Unfourtunately the names BLizzard gives are not entirely unique,
+-- so try hard to disambiguate them via the type, and if nothing works by
+-- including the plain id.
+
+local unused = {}
+
+local instance_difficulty_names = {
+  [1] = L["Dungeon (Normal)"],
+  [2] = L["Dungeon (Heroic)"],
+  [3] = L["10 Player Raid (Normal)"],
+  [4] = L["25 Player Raid (Normal)"],
+  [5] = L["10 Player Raid (Heroic)"],
+  [6] = L["25 Player Raid (Heroic)"],
+  [7] = L["Looking for Raid"],
+  [8] = L["Challenge Mode"],
+  [9] = L["40 Player Raid"],
+  [11] = L["Scenario (Heroic)"],
+  [12] = L["Scenario (Normal)"],
+  [14] = L["Raid (Normal)"],
+  [15] = L["Raid (Heroic)"],
+}
+
+local names = {}
+local ids = {}
+
+for i = 1, 200 do
+  local name, type = GetDifficultyInfo(i)
+  if name then
+    if instance_difficulty_names[i] then
+      if instance_difficulty_names[i] ~= unused then
+        Private.instance_difficulty_types[i] = instance_difficulty_names[i]
+      end
+    else
+      Private.instance_difficulty_types[i] = name
+      WeakAuras.prettyPrint(string.format("Unknown difficulty id found. Please report as a bug: %s %s %s", i, name, type))
+    end
+  end
+end
 
 Private.TocToExpansion = {
    [1] = L["Classic"],
@@ -2490,17 +2553,16 @@ Private.difficulty_types = {
   heroic = PLAYER_DIFFICULTY2
 }
 
-Private.raid_role_types = {
+--[[Private.raid_role_types = {
   MAINTANK = "|TInterface\\GroupFrame\\UI-Group-maintankIcon:16:16|t "..MAINTANK,
   MAINASSIST = "|TInterface\\GroupFrame\\UI-Group-mainassistIcon:16:16|t "..MAINASSIST,
   NONE = L["Other"]
-}
+}]]
 
 Private.role_types = {
-  tank = "|TInterface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES:16:16:0:0:64:64:0:19:22:41|t "..TANK,
-  melee = "|TInterface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES:16:16:0:0:64:64:20:39:22:41|t "..L["Melee"],
-  caster = "|TInterface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES:16:16:0:0:64:64:20:39:22:41|t "..L["Ranged"],
-  healer = "|TInterface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES:16:16:0:0:64:64:20:39:1:20|t "..HEALER,
+  TANK = INLINE_TANK_ICON.." "..TANK,
+  DAMAGER = INLINE_DAMAGER_ICON.." "..DAMAGER,
+  HEALER = INLINE_HEALER_ICON.." "..HEALER
 }
 
 Private.group_member_types = {
@@ -2894,6 +2956,11 @@ Private.charges_change_condition_type = {
 Private.combat_event_type = {
   PLAYER_REGEN_ENABLED = L["Leaving"],
   PLAYER_REGEN_DISABLED = L["Entering"]
+}
+
+Private.encounter_event_type = {
+  ENCOUNTER_END = L["Leaving"],
+  ENCOUNTER_START = L["Entering"]
 }
 
 Private.bool_types = {

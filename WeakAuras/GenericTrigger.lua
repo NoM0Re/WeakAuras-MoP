@@ -2940,8 +2940,7 @@ function WeakAuras.WatchUnitChange(unit)
     watchUnitChange:RegisterEvent("PLAYER_ROLES_ASSIGNED");
     watchUnitChange:RegisterEvent("UNIT_TARGET");
     watchUnitChange:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT");
-    watchUnitChange:RegisterEvent("PARTY_MEMBERS_CHANGED");
-    watchUnitChange:RegisterEvent("RAID_ROSTER_UPDATE");
+    watchUnitChange:RegisterEvent("GROUP_ROSTER_UPDATE");
     if WeakAuras.isAwesomeEnabled() then
       watchUnitChange:RegisterEvent("NAME_PLATE_UNIT_ADDED")
       watchUnitChange:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
@@ -3101,22 +3100,7 @@ function WeakAuras.WatchUnitChange(unit)
       UNIT_TARGET = function(unit, eventsToSend)
         handleUnit(unit .. "target", eventsToSend, unitUpdate, markerInit, reactionInit)
       end,
-      PARTY_MEMBERS_CHANGED = function(_, eventsToSend)
-        for unit in pairs(Private.multiUnitUnits.group) do
-          handleUnit(unit, eventsToSend, unitUpdate, markerInit, reactionInit)
-        end
-        local inRaid = IsInRaid()
-        local inRaidChanged = inRaid ~= watchUnitChange.inRaid
-        if inRaidChanged then
-          for unit in pairs(Private.multiUnitUnits.group) do
-            if watchUnitChange.trackedUnits[unit] and watchUnitChange.unitIdToGUID[unit] then
-              eventsToSend["UNIT_CHANGED_" .. unit] = unit
-            end
-          end
-          watchUnitChange.inRaid = inRaid
-        end
-      end,
-      RAID_ROSTER_UPDATE = function(_, eventsToSend)
+      GROUP_ROSTER_UPDATE = function(_, eventsToSend)
         for unit in pairs(Private.multiUnitUnits.group) do
           handleUnit(unit, eventsToSend, unitUpdate, markerInit, reactionInit)
         end
@@ -4334,6 +4318,24 @@ do
       return max(0.75, 1.5 * 100 / (100 + GetHaste()))
     end
   end
+end
+
+WeakAuras.CheckForItemBonusId = function(ids)
+  for id in tostring(ids):gmatch('([^,]+)') do
+    id = ":" .. tostring(id:trim()) .. ":"
+    for slot in pairs(Private.item_slot_types) do
+      local itemLink = GetInventoryItemLink('player', slot)
+      if itemLink and itemLink:find(id, 1, true) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+-- Placeholder
+WeakAuras.GetLegendariesBonusIds = function()
+  return ""
 end
 
 WeakAuras.CheckForItemEquipped = function(itemId, specificSlot)
