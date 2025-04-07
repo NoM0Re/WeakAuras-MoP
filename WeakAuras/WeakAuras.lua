@@ -1491,7 +1491,7 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
   end
 
   local player, realm, zone, subzone = UnitName("player"), GetRealmName(), GetRealZoneText(), GetSubZoneText();
-  local spec, specId, role = false, false, false
+  local spec, specId, role = 0, 0, ""
   local inPetBattle, vehicle, vehicleUi = false, false, false
   local guild = GetGuildInfo("player")
   local _, race = UnitRace("player")
@@ -1507,8 +1507,8 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
   local mounted = IsMounted() or false
 
   spec = GetSpecialization() or 0
-  specId = GetSpecializationInfo(spec)
-  role = select(6, GetSpecializationInfo(spec))
+  specId = GetSpecializationInfo(spec) or 0
+  role = select(6, GetSpecializationInfo(spec)) or ""
   inPetBattle = C_PetBattles.IsInBattle()
   vehicle = UnitInVehicle('player') or UnitOnTaxi('player') or false
   vehicleUi = UnitHasVehicleUI('player') or HasOverrideActionBar() or HasVehicleActionBar() or false

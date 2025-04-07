@@ -888,9 +888,9 @@ function Private.ExecEnv.CheckRaidFlags(flags, flagToCheck)
 end
 
 function WeakAuras.SpecForUnit(unit)
-  local spec = WeakAuras.LGT:GetUnitTalentSpec(unit)
-  local class = select(2, UnitClass(unit))
-  return spec and class and (class .. spec)
+  --local spec = WeakAuras.LGT:GetUnitTalentSpec(unit)
+  --local class = select(2, UnitClass(unit))
+  --return spec and class and (class .. spec)
 end
 
 function WeakAuras.IsSpellKnownForLoad(spell, exact)
@@ -1717,6 +1717,7 @@ Private.event_prototypes = {
       AddUnitEventForEvents(result, unit, "UNIT_NAME_UPDATE")
       AddUnitEventForEvents(result, unit, "UNIT_FLAGS")
       AddUnitEventForEvents(result, unit, "PLAYER_FLAGS_CHANGED")
+      AddUnitEventForEvents(result, unit, "INCOMING_RESURRECT_CHANGED")
       if trigger.use_inRange then
         AddUnitEventForEvents(result, unit, "UNIT_IN_RANGE_UPDATE")
       end
