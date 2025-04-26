@@ -634,6 +634,17 @@ Private.anim_presets = {
   }
 };
 
+WeakAuras.class_ids = {}
+WeakAuras.classes_sorted = {}
+for classID = 1, 20 do -- GetNumClasses not supported by wow classic
+  local _, classFile = GetClassInfo(classID)
+  if classInfo then
+    WeakAuras.class_ids[classFile] = classID
+    tinsert(WeakAuras.classes_sorted, classFile)
+  end
+end
+table.sort(WeakAuras.classes_sorted)
+
 function WeakAuras.CheckTalentByIndex(index, extraOption)
   local tab = ceil(index / MAX_NUM_TALENTS)
   local num_talent = (index - 1) % MAX_NUM_TALENTS + 1
@@ -1150,8 +1161,10 @@ Private.load_prototype = {
       display = L["Class and Specialization"],
       type = "multiselect",
       values = "spec_types_all",
-      test = "WeakAuras.CheckClassSpec(class, %s)",
+      init = "arg",
       events = {"PLAYER_TALENT_UPDATE"},
+      sorted = true,
+      sortOrder = Private.specs_sorted,
     },
     {
       name = "talent",
