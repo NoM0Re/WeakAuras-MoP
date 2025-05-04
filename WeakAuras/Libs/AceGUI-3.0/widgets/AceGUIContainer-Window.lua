@@ -21,7 +21,7 @@ local CreateFrame, UIParent = CreateFrame, UIParent
 ]]
 do
 	local Type = "Window"
-	local Version = 6
+	local Version = 5
 
 	local function frameOnShow(this)
 		this.obj:Fire("OnShow")
@@ -190,7 +190,7 @@ do
 		frame:SetToplevel(true)
 
 		local titlebg = frame:CreateTexture(nil, "BACKGROUND")
-		titlebg:SetTexture(251966) -- Interface\\PaperDollInfoFrame\\UI-GearManager-Title-Background
+		titlebg:SetTexture([[Interface\PaperDollInfoFrame\UI-GearManager-Title-Background]])
 		titlebg:SetPoint("TOPLEFT", 9, -6)
 		titlebg:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", -28, -24)
 

@@ -2,7 +2,7 @@
 TreeGroup Container
 Container that uses a tree control to switch between groups.
 -------------------------------------------------------------------------------]]
-local Type, Version = "TreeGroup", 45
+local Type, Version = "TreeGroup", 44
 local AceGUI = LibStub and LibStub("AceGUI-3.0", true)
 if not AceGUI or (AceGUI:GetWidgetVersion(Type) or 0) >= Version then return end
 
@@ -16,7 +16,7 @@ local CreateFrame, UIParent = CreateFrame, UIParent
 
 -- Global vars/functions that we don't upvalue since they might get hooked, or upgraded
 -- List them here for Mikk's FindGlobals script
--- GLOBALS: FONT_COLOR_CODE_CLOSE
+-- GLOBALS: GameTooltip, FONT_COLOR_CODE_CLOSE
 
 -- Recycling functions
 local new, del
@@ -420,11 +420,6 @@ local methods = {
 		local maxlines = (floor(((self.treeframe:GetHeight()or 0) - 20 ) / 18))
 		if maxlines <= 0 then return end
 
-		if self.frame:GetParent() == UIParent and not fromOnUpdate then
-			self.frame:SetScript("OnUpdate", FirstFrameUpdate)
-			return
-		end
-
 		local first, last
 
 		scrollToSelection = status.scrollToSelection
@@ -498,11 +493,10 @@ local methods = {
 				end
 			end
 
-			UpdateButton(button, line, status.selected == line.uniquevalue, line.hasChildren, groupstatus[line.uniquevalue] )
+			UpdateButton(button, line, status.selected == line.uniquevalue, line.hasChildren, groupstatus[line.uniquevalue])
 			button:Show()
 			buttonnum = buttonnum + 1
 		end
-
 	end,
 
 	["SetSelected"] = function(self, value)
@@ -629,7 +623,7 @@ local PaneBackdrop  = {
 local DraggerBackdrop  = {
 	bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
 	edgeFile = nil,
-	tile = true, tileSize = 16, edgeSize = 1,
+	tile = true, tileSize = 16, edgeSize = 0,
 	insets = { left = 3, right = 3, top = 7, bottom = 7 }
 }
 
@@ -677,7 +671,7 @@ local function Constructor()
 	scrollbg:SetAllPoints(scrollbar)
 	scrollbg:SetTexture(0,0,0,0.4)
 
-	local border = CreateFrame("Frame", nil, frame)
+	local border = CreateFrame("Frame",nil,frame)
 	border:SetPoint("TOPLEFT", treeframe, "TOPRIGHT")
 	border:SetPoint("BOTTOMRIGHT")
 	border:SetBackdrop(PaneBackdrop)
