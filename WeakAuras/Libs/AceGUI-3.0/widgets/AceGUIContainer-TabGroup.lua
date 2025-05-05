@@ -2,12 +2,12 @@
 TabGroup Container
 Container that uses tabs on top to switch between groups.
 -------------------------------------------------------------------------------]]
-local Type, Version = "TabGroup", 35
+local Type, Version = "TabGroup", 37
 local AceGUI = LibStub and LibStub("AceGUI-3.0", true)
 if not AceGUI or (AceGUI:GetWidgetVersion(Type) or 0) >= Version then return end
 
 -- Lua APIs
-local pairs, ipairs, assert, type, wipe = pairs, ipairs, assert, type, wipe
+local pairs, ipairs, assert, type, wipe = pairs, ipairs, assert, type, table.wipe
 
 -- WoW APIs
 local PlaySound = PlaySound
