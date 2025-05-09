@@ -347,7 +347,7 @@ WeakAuras.UnitIsPet = function(unit)
 end
 
 local playerLevel = UnitLevel("player");
-local currentInstanceType = "none"
+--local currentInstanceType = "none"
 
 -- Custom Action Functions, keyed on id, "init" / "start" / "finish"
 Private.customActionsFunctions = {};
@@ -1407,9 +1407,9 @@ end
 
 function Private.UpdateCurrentInstanceType(instanceType)
   if (not IsInInstance()) then
-    currentInstanceType = "none"
+    --currentInstanceType = "none"
   else
-    currentInstanceType = instanceType or select (2, GetInstanceInfo())
+    --currentInstanceType = instanceType or select (2, GetInstanceInfo())
   end
 end
 
