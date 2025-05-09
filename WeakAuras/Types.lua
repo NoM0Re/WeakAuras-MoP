@@ -12,7 +12,7 @@ local LBR_Base = LibBabbleRace:GetBaseLookupTable();
 
 local wipe, tinsert = wipe, tinsert
 local GetNumShapeshiftForms, GetShapeshiftFormInfo = GetNumShapeshiftForms, GetShapeshiftFormInfo
-
+local GetNumSpecializationsForClassID, GetSpecializationInfoForClassID = GetNumSpecializationsForClassID, GetSpecializationInfoForClassID
 local MAX_NUM_TALENTS = MAX_NUM_TALENTS or 20
 
 local function WA_GetClassColor(classFilename)
@@ -34,9 +34,6 @@ Private.glow_frame_types = {
   FRAMESELECTOR = L["Frame Selector"],
   PARENTFRAME = L["Parent Frame"]
 }
-if WeakAuras.isAwesomeEnabled() then
-  Private.glow_frame_types.NAMEPLATE = L["Nameplate"]
-end
 
 Private.circular_group_constant_factor_types = {
   ANGLE = L["Angle and Radius"],
@@ -66,10 +63,10 @@ Private.character_types = {
   npc = L["Non-player Character"]
 }
 
---[[Private.spec_position_types = {
-  caster = L["Ranged"],
-  melee = L["Melee"]
-}]]
+Private.spec_position_types = {
+  RANGED = L["Ranged"],
+  MELEE = L["Melee"]
+}
 
 Private.group_sort_types = {
   ascending = L["Ascending"],
@@ -113,7 +110,6 @@ Private.big_number_types = {
   ["AbbreviateLargeNumbers"] = L["AbbreviateLargeNumbers (Blizzard)"],
   ["BreakUpLargeNumbers"] = L["BreakUpLargeNumbers (Blizzard)"],
 }
-
 Private.big_number_types_with_disable = CopyTable(Private.big_number_types)
 Private.big_number_types_with_disable["disable"] = L["Disabled"]
 
@@ -1142,7 +1138,6 @@ Private.aura_types = {
   DEBUFF = L["Debuff"],
 }
 
-
 Private.debuff_class_types = {
   magic = L["Magic"],
   curse = L["Curse"],
@@ -1157,20 +1152,21 @@ Private.player_target_events = {
   PLAYER_FOCUS_CHANGED = "focus",
 }
 
-Private.unit_types = {
-  player = L["Player"],
+local target_unit_types = {
   target = L["Target"],
   focus = L["Focus"],
+}
+
+Private.unit_types = WeakAuras.Mixin({
+  player = L["Player"],
   group = L["Group"],
   member = L["Specific Unit"],
   pet = L["Pet"],
   multi = L["Multi-target"]
-}
+}, target_unit_types)
 
-Private.unit_types_bufftrigger_2 = {
+Private.unit_types_bufftrigger_2 = WeakAuras.Mixin({
   player = L["Player"],
-  target = L["Target"],
-  focus = L["Focus"],
   group = L["Smart Group"],
   raid = L["Raid"],
   party = L["Party"],
@@ -1179,29 +1175,21 @@ Private.unit_types_bufftrigger_2 = {
   pet = L["Pet"],
   member = L["Specific Unit"],
   multi = L["Multi-target"]
-}
-if WeakAuras.isAwesomeEnabled() then
-  Private.unit_types_bufftrigger_2.nameplate = L["Nameplate"]
-end
+}, target_unit_types)
 
-Private.actual_unit_types = {
+Private.actual_unit_types = WeakAuras.Mixin({
   player = L["Player"],
   pet = L["Pet"],
-  target = L["Target"],
-}
+}, target_unit_types)
 
-Private.actual_unit_types_with_specific = {
+Private.actual_unit_types_with_specific = WeakAuras.Mixin({
   player = L["Player"],
-  target = L["Target"],
-  focus = L["Focus"],
   pet = L["Pet"],
-  member = L["Specific Unit"],
-}
+  member = L["Specific Unit"]
+}, target_unit_types)
 
-Private.actual_unit_types_cast = {
+Private.actual_unit_types_cast = WeakAuras.Mixin({
   player = L["Player"],
-  target = L["Target"],
-  focus = L["Focus"],
   group = L["Smart Group"],
   party = L["Party"],
   raid = L["Raid"],
@@ -1209,30 +1197,20 @@ Private.actual_unit_types_cast = {
   arena = L["Arena"],
   pet = L["Pet"],
   member = L["Specific Unit"],
-}
-if WeakAuras.isAwesomeEnabled() then
-  Private.actual_unit_types_cast.nameplate = L["Nameplate"]
-end
+}, target_unit_types)
 
 Private.actual_unit_types_cast_tooltip = L["• |cff00ff00Player|r, |cff00ff00Target|r, |cff00ff00Focus|r, and |cff00ff00Pet|r correspond directly to those individual unitIDs.\n• |cff00ff00Specific Unit|r lets you provide a specific valid unitID to watch.\n|cffff0000Note|r: The game will not fire events for all valid unitIDs, making some untrackable by this trigger.\n• |cffffff00Party|r, |cffffff00Raid|r, |cffffff00Boss|r, |cffffff00Arena|r, and |cffffff00Nameplate|r can match multiple corresponding unitIDs.\n• |cffffff00Smart Group|r adjusts to your current group type, matching just the \"player\" when solo, \"party\" units (including \"player\") in a party or \"raid\" units in a raid.\n\n|cffffff00*|r Yellow Unit settings will create clones for each matching unit while this trigger is providing Dynamic Info to the Aura."]
 
-Private.threat_unit_types = {
-  target = L["Target"],
-  focus = L["Focus"],
+Private.threat_unit_types = WeakAuras.Mixin({
   boss = L["Boss"],
   member = L["Specific Unit"],
   none = L["At Least One Enemy"]
-}
-if WeakAuras.isAwesomeEnabled() then
-  Private.threat_unit_types.nameplate = L["Nameplate"]
-end
+}, target_unit_types)
 
-Private.unit_types_range_check = {
-  target = L["Target"],
-  focus = L["Focus"],
+Private.unit_types_range_check = WeakAuras.Mixin({
   pet = L["Pet"],
   member = L["Specific Unit"]
-}
+}, target_unit_types)
 
 Private.unit_threat_situation_types = {
   [-1] = L["Not On Threat Table"],
@@ -1284,9 +1262,12 @@ local function update_forms()
   Private.form_types = {}
   Private.form_types[0] = "0 - " .. L["Humanoid"]
   for i = 1, GetNumShapeshiftForms() do
-    local _, name = GetShapeshiftFormInfo(i);
-    if(name) then
-      Private.form_types[i] = i.." - "..name
+    local _, _, _, id = GetShapeshiftFormInfo(i);
+    if(id) then
+      local name = GetSpellInfo(id);
+      if(name) then
+        Private.form_types[i] = i.." - "..name
+      end
     end
   end
   if Private.OptionsFrame and not tCompare(oldForms, Private.form_types) then
@@ -1369,9 +1350,6 @@ Private.anchor_frame_types = {
   UNITFRAME = L["Unit Frames"],
   CUSTOM = L["Custom"]
 }
-if WeakAuras.isAwesomeEnabled() then
-  Private.anchor_frame_types.NAMEPLATE = L["Nameplates"]
-end
 
 Private.anchor_frame_types_group = {
   SCREEN = L["Screen/Parent Group"],
@@ -1452,9 +1430,11 @@ Private.subevent_actual_prefix_types = {
 }
 
 Private.subevent_suffix_types = {
+  _ABSORBED = L["Absorbed"],
   _DAMAGE = L["Damage"],
   _MISSED = L["Missed"],
   _HEAL = L["Heal"],
+  _HEAL_ABSORBED = L["Heal Absorbed"],
   _ENERGIZE = L["Energize"],
   _DRAIN = L["Drain"],
   _LEECH = L["Leech"],
@@ -1482,14 +1462,28 @@ Private.subevent_suffix_types = {
 }
 
 Private.power_types = {
-  [0] = MANA,
-  [1] = RAGE,
-  [2] = FOCUS,
-  [3] = ENERGY,
-  [4] = HAPPINESS,
+  [0] = POWER_TYPE_MANA,
+  [1] = POWER_TYPE_RED_POWER,
+  [2] = POWER_TYPE_FOCUS,
+  [3] = POWER_TYPE_ENERGY,
+  [4] = COMBO_POINTS,
   [6] = RUNIC_POWER,
+  [7] = SOUL_SHARDS_POWER,
+  [9] = HOLY_POWER,
+  [11] = POWER_TYPE_MAELSTROM,
+  [12] = CHI_POWER,
+  [14] = BURNING_EMBERS,
+  [15] = POWER_TYPE_DEMONIC_FURY,
+  [26] = ECLIPSE,
+  [28] = SHADOW_ORBS,
+
 }
 
+Private.eclipse_direction_types = {
+  none = L["None"],
+  sun = L["Sun"],
+  moon = L["Moon"]
+}
 Private.miss_types = {
   ABSORB = L["Absorb"],
   BLOCK = L["Block"],
@@ -1575,12 +1569,6 @@ for id, str in pairs(Private.combatlog_spell_school_types) do
   Private.combatlog_spell_school_types_for_ui[id] = ("%.3d - %s"):format(id, str)
 end
 
-Private.money_icons = {
-  ["gold"] = "interface/moneyframe/ui-goldicon",
-  ["silver"] = "interface/moneyframe/ui-silvericon",
-  ["copper"] = "interface/moneyframe/ui-coppericon"
-}
-
 Private.coin_icons = {
   ["gold"] = "|Tinterface/moneyframe/ui-goldicon:0|t",
   ["silver"] = "|Tinterface/moneyframe/ui-silvericon:0|t",
@@ -1604,24 +1592,6 @@ Private.item_quality_types = {
   [7] = ITEM_QUALITY7_DESC,
   [8] = ITEM_QUALITY8_DESC,
 }
-
-Private.totalcount_currencies = {
-  [45624] = 3018, -- Emblems of Conquest
-  [40753] = 1465, -- Emblems of Valor
-  [29434] = 1462, -- Badges of Justice
-  [40752] = 1464, -- Emblems of Heroism
-  [47241] = 4729, -- Emblems of Triumph
-  [49426] = 4730, -- Emblems of Frost
-}
-
-function Private.ExecEnv.GetTotalCountCurrencies(currencyID)
-  local achievementID = Private.totalcount_currencies[currencyID]
-  if achievementID then
-      local totalEarned = GetStatistic(achievementID)
-      return tonumber(totalEarned) or 0
-  end
-  return 0
-end
 
 local function InitializeCurrencies()
   if Private.discovered_currencies then
@@ -1730,6 +1700,24 @@ Private.gradient_orientations = {
   VERTICAL = L["Vertical"]
 }
 
+Private.spec_types = {
+  [1] = SPECIALIZATION.." 1",
+  [2] = SPECIALIZATION.." 2",
+  [3] = SPECIALIZATION.." 3",
+  [4] = SPECIALIZATION.." 4"
+}
+
+Private.spec_types_3 = {
+  [1] = SPECIALIZATION.." 1",
+  [2] = SPECIALIZATION.." 2",
+  [3] = SPECIALIZATION.." 3"
+}
+
+Private.spec_types_2 = {
+  [1] = SPECIALIZATION.." 1",
+  [2] = SPECIALIZATION.." 2"
+}
+
 WeakAuras.spec_types_specific = {}
 
 Private.spec_types_all = {}
@@ -1759,13 +1747,22 @@ local spec_frame = CreateFrame("Frame");
 spec_frame:RegisterEvent("PLAYER_LOGIN")
 spec_frame:SetScript("OnEvent", update_specs);
 
-Private.totem_types = {
-  [1] = L["Fire"],
-  [2] = L["Earth"],
-  [3] = L["Water"],
-  [4] = L["Air"]
-}
+-- GetTotemInfo() only works for the first 5 totems
+Private.totem_types = {};
+local totemString = L["Totem #%i"];
+for i = 1, 5 do
+  Private.totem_types[i] = totemString:format(i);
+end
 
+Private.main_spell_schools = {
+  [1] = GetSchoolString(1),
+  [2] = GetSchoolString(2),
+  [4] = GetSchoolString(4),
+  [8] = GetSchoolString(8),
+  [16] = GetSchoolString(16),
+  [32] = GetSchoolString(32),
+  [64] = GetSchoolString(64),
+}
 Private.texture_types = {
   ["Blizzard Alerts"] = {
     ["Interface\\AddOns\\WeakAuras\\Media\\SpellActivationOverlays\\arcane_missiles"] = "Arcane Missiles",
@@ -2305,14 +2302,12 @@ Private.string_operator_types = {
 
 Private.weapon_types = {
   ["main"] = MAINHANDSLOT,
-  ["off"] = SECONDARYHANDSLOT,
-  ["ranged"] = RANGEDSLOT,
+  ["off"] = SECONDARYHANDSLOT
 }
 
 Private.swing_types = {
   ["main"] = MAINHANDSLOT,
-  ["off"] = SECONDARYHANDSLOT,
-  ["ranged"] = RANGEDSLOT
+  ["off"] = SECONDARYHANDSLOT
 }
 
 Private.rune_specific_types = {
@@ -2383,7 +2378,7 @@ Private.grid_types = {
   LV = L["Left, then Centered Vertical"],
   RV = L["Right, then Centered Vertical"],
   HV = L["Centered Horizontal, then Centered Vertical"],
-  VH = L["Centered Vertical, then Centered Horizontal"],
+  VH = L["Centered Vertical, then Centered Horizontal"]
 }
 
 Private.centered_types_h = {
@@ -2508,12 +2503,12 @@ Private.instance_types = {
   fortyman = L["40 Man Raid"],
   flexible = L["Flex Raid"],
   pvp = L["Battleground"],
-  arena = L["Arena"]
+  arena = L["Arena"],
+  ratedpvp = L["Rated Battleground"],
+  ratedarena = L["Rated Arena"]
 }
 
-Private.instance_difficulty_types = {
-
-}
+Private.instance_difficulty_types = {}
 
 -- Fill out instance_difficulty_types automatically.
 -- Unfourtunately the names BLizzard gives are not entirely unique,
@@ -2541,7 +2536,7 @@ local instance_difficulty_names = {
 local names = {}
 local ids = {}
 
-for i = 1, 200 do
+for i = 1, 220 do
   local name, type = GetDifficultyInfo(i)
   if name then
     if instance_difficulty_names[i] then
@@ -2550,7 +2545,7 @@ for i = 1, 200 do
       end
     else
       Private.instance_difficulty_types[i] = name
-      WeakAuras.prettyPrint(string.format("Unknown difficulty id found. Please report as a bug: %s %s %s", i, name, type))
+      WeakAuras.prettyPrint(string.format("Unknown difficulty id found. You are probably running an outdated version. Debug Information: %s %s %s", i, name, type))
     end
   end
 end
@@ -2578,15 +2573,16 @@ Private.group_types = {
 
 Private.difficulty_types = {
   none = L["None"],
+  lfr = PLAYER_DIFFICULTY3,
   normal = PLAYER_DIFFICULTY1,
-  heroic = PLAYER_DIFFICULTY2
+  heroic = PLAYER_DIFFICULTY2,
 }
 
---[[Private.raid_role_types = {
+Private.raid_role_types = {
   MAINTANK = "|TInterface\\GroupFrame\\UI-Group-maintankIcon:16:16|t "..MAINTANK,
   MAINASSIST = "|TInterface\\GroupFrame\\UI-Group-mainassistIcon:16:16|t "..MAINASSIST,
   NONE = L["Other"]
-}]]
+}
 
 Private.role_types = {
   TANK = INLINE_TANK_ICON.." "..TANK,
@@ -2606,11 +2602,8 @@ Private.classification_types = {
   elite = L["Elite"],
   rare = L["Rare"],
   normal = L["Normal"],
-  trivial = L["Trivial (Low Level)"]
+  trivial = L["Trivial (Low Level)"],
 }
-if WeakAuras.isAwesomeEnabled() then
-  Private.classification_types.minus = L["Minus (Small Nameplate)"]
-end
 
 Private.anim_start_preset_types = {
   slidetop = L["Slide from Top"],
@@ -2653,7 +2646,7 @@ Private.anim_finish_preset_types = {
 }
 
 Private.chat_message_types = {
-  CHAT_MSG_BATTLEGROUND = L["Battleground"],
+  CHAT_MSG_INSTANCE_CHAT = L["Instance"],
   CHAT_MSG_BG_SYSTEM_NEUTRAL = L["BG-System Neutral"],
   CHAT_MSG_BG_SYSTEM_ALLIANCE = L["BG-System Alliance"],
   CHAT_MSG_BG_SYSTEM_HORDE = L["BG-System Horde"],
@@ -2680,7 +2673,7 @@ Private.chat_message_types = {
 }
 
 Private.chat_message_leader_event = {
-  CHAT_MSG_BATTLEGROUND = "CHAT_MSG_BATTLEGROUND_LEADER",
+  CHAT_MSG_INSTANCE_CHAT = "CHAT_MSG_INSTANCE_CHAT_LEADER",
   CHAT_MSG_PARTY = "CHAT_MSG_PARTY_LEADER",
   CHAT_MSG_RAID = "CHAT_MSG_RAID_LEADER"
 }
@@ -2697,7 +2690,7 @@ Private.send_chat_message_types = {
   RAID = L["Raid"],
   SMARTRAID = L["BG>Raid>Party>Say"],
   RAID_WARNING = L["Raid Warning"],
-  BATTLEGROUND = L["Battleground"],
+  INSTANCE_CHAT = L["Instance"],
   COMBAT = L["Blizzard Combat Text"],
   PRINT = L["Chat Frame"],
   ERROR = L["Error Frame"]
@@ -2908,8 +2901,11 @@ Private.gtfo_types = {
 Private.pet_behavior_types = {
   aggressive = PET_MODE_AGGRESSIVE,
   passive = PET_MODE_PASSIVE,
-  defensive = PET_MODE_DEFENSIVE
+  defensive = PET_MODE_DEFENSIVE,
+  assist = PET_MODE_ASSIST
 }
+
+Private.pet_spec_types = {}
 
 Private.cooldown_progress_behavior_types = {
   showOnCooldown = L["On Cooldown"],
@@ -2950,7 +2946,6 @@ Private.bufftrigger_2_per_unit_mode = {
 }
 
 Private.item_slot_types = {
-  [0] = AMMOSLOT,
   [1]  = HEADSLOT,
   [2]  = NECKSLOT,
   [3]  = SHOULDERSLOT,
@@ -2967,8 +2962,16 @@ Private.item_slot_types = {
   [15] = BACKSLOT,
   [16] = MAINHANDSLOT,
   [17] = SECONDARYHANDSLOT,
-  [18] = RANGEDSLOT,
-  [19] = TABARDSLOT
+  [19] = TABARDSLOT,
+  [20] = L["1. Professsion Tool"],
+  [21] = L["1. Profession 1. Accessory"],
+  [22] = L["1. Profession 2. Accessory"],
+  [23] = L["2. Professsion Tool"],
+  [24] = L["2. Profession 1. Accessory"],
+  [25] = L["2. Profession 2. Accessory"],
+  [26] = COOKINGTOOLSLOT,
+  [27] = COOKINGGEAR0SLOT,
+  [28] = FISHINGTOOLSLOT,
 }
 
 Private.charges_change_type = {
@@ -2995,6 +2998,11 @@ Private.encounter_event_type = {
 Private.bool_types = {
   [0] = L["False"],
   [1] = L["True"]
+}
+
+Private.absorb_modes = {
+  OVERLAY_FROM_START = L["Attach to Start"],
+  OVERLAY_FROM_END = L["Attach to End"]
 }
 
 Private.update_categories = {
@@ -3352,8 +3360,8 @@ Private.array_entry_name_types = {
   -- the rest is auto-populated with indices which are valid entry name sources
 }
 
+-- option types which can be used to generate entry names on arrays
 Private.name_source_option_types = {
-  -- option types which can be used to generate entry names on arrays
   input = true,
   number = true,
   range = true,
@@ -3370,10 +3378,116 @@ Private.group_option_types = {
   array = L["Array"],
 }
 
+---@type table<number, string>
+Private.difficulty_info = {
+  [1] = {
+    size = "party",
+    difficulty = "normal",
+  },
+  [2] = {
+    size = "party",
+    difficulty = "heroic",
+  },
+  [3] = {
+    size = "ten",
+    difficulty = "normal",
+  },
+  [4] = {
+    size = "twentyfive",
+    difficulty = "normal",
+  },
+  [5] = {
+    size = "ten",
+    difficulty = "heroic",
+  },
+  [6] = {
+    size = "twentyfive",
+    difficulty = "heroic",
+  },
+  [7] = {
+    size = "twentyfive",
+    difficulty = "lfr",
+  },
+  [8] = {
+    size = "party",
+    difficulty = "challenge",
+  },
+  [9] = {
+    size = "fortyman",
+    difficulty = "normal",
+  },
+  [11] = {
+    size = "scenario",
+    difficulty = "heroic",
+  },
+  [12] = {
+    size = "scenario",
+    difficulty = "normal",
+  },
+  -- 13 is unused
+  [14] = {
+    size = "flexible",
+    difficulty = "normal",
+  },
+  [15] = {
+    size = "flexible",
+    difficulty = "heroic",
+  },
+  [16] = {
+    size = "twenty",
+    difficulty = "mythic",
+  },
+  [17] = {
+    size = "flexible",
+    difficulty = "lfr",
+  },
+  [23] = {
+    size = "party",
+    difficulty = "mythic",
+  },
+  [24] = {
+    size = "party",
+    difficulty = "timewalking",
+  },
+  [33] = {
+    size = "flexible",
+    difficulty = "timewalking",
+  },
+  [148] = {
+    size = "twenty",
+    difficulty = "normal",
+  },
+  [173] = {
+    size = "party",
+    difficulty = "normal",
+  },
+  [174] = {
+    size = "party",
+    difficulty = "heroic",
+  },
+  [175] = {
+    size = "ten",
+    difficulty = "heroic",
+  },
+  [176] = {
+    size = "twentyfive",
+    difficulty = "heroic",
+  },
+  [186] = {
+    size = "fortyman",
+    difficulty = "normal",
+  },
+  [226] = {
+    size = "twenty",
+    difficulty = "normal",
+  },
+}
+
 Private.glow_types = {
   ACShine = L["Autocast Shine"],
   Pixel = L["Pixel Glow"],
   buttonOverlay = L["Action Button Glow"],
+  Proc = L["Proc Glow"]
 }
 
 Private.font_sizes = {
@@ -3388,7 +3502,7 @@ Private.baseUnitId = {
   ["target"] = true,
   ["pet"] = true,
   ["focus"] = true,
-  ["vehicle"] = true
+  ["vehicle"] = true,
 }
 
 Private.multiUnitId = {
@@ -3402,9 +3516,6 @@ Private.multiUnitId = {
   ["partypetsonly"] = true,
   ["raid"] = true,
 }
-if WeakAuras.isAwesomeEnabled() then
-  Private.multiUnitId["nameplate"] = true
-end
 
 Private.multiUnitUnits = {
   ["boss"] = {},
@@ -3413,9 +3524,6 @@ Private.multiUnitUnits = {
   ["party"] = {},
   ["raid"] = {}
 }
-if WeakAuras.isAwesomeEnabled() then
-  Private.multiUnitUnits["nameplate"] = {}
-end
 
 Private.multiUnitUnits.group["player"] = true
 Private.multiUnitUnits.party["player"] = true
@@ -3432,7 +3540,7 @@ for i = 1, 4 do
   Private.multiUnitUnits.party["partypet"..i] = true
 end
 
-for i = 1, MAX_BOSS_FRAMES do
+for i = 1, 10 do
   Private.baseUnitId["boss"..i] = true
   Private.multiUnitUnits.boss["boss"..i] = true
 end
@@ -3451,13 +3559,6 @@ for i = 1, 40 do
   Private.multiUnitUnits.raid["raidpet"..i] = true
 end
 
-if WeakAuras.isAwesomeEnabled() then
-  for i = 1, 100 do
-    Private.baseUnitId["nameplate"..i] = true
-    Private.multiUnitUnits.nameplate["nameplate"..i] = true
-  end
-end
-
 Private.dbm_types = {
   [1] = L["Add"],
   [2] = L["AOE"],
@@ -3473,6 +3574,23 @@ Private.weapon_enchant_types = {
   showOnMissing = L["Enchant Missing"],
   showAlways = L["Always"],
 }
+
+WeakAuras.EJIcons = {
+  tank =      "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:7:25:7:25|t",
+  dps =       "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:39:57:7:25|t",
+  healer =    "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:71:89:7:25|t",
+  mythic =    "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:103:121:7:25|t",
+  deadly =    "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:135:153:7:25|t",
+  important = "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:167:185:7:25|t",
+  interrupt = "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:199:217:7:25|t",
+  magic =     "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:231:249:7:25|t",
+  curse =     "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:7:25:39:57|t",
+  poison =    "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:39:57:39:57|t",
+  disease =   "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:71:89:39:57|t",
+  enrage =    "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:103:121:39:57|t",
+  bleed =     "|TInterface\\EncounterJournal\\UI-EJ-Icons:::::256:64:158:192:32:64|t",
+}
+
 Private.reset_swing_spells = {
   [GetSpellInfo(1464)] = true, -- Slam
   [GetSpellInfo(78)] = true, -- Heroic Strike

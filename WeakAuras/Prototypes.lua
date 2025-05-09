@@ -99,6 +99,14 @@ WeakAuras.UnitRaidRole = function(unit)
   end
 end
 
+function WeakAuras.SpellSchool(school)
+  return Private.combatlog_spell_school_types[school] or ""
+end
+
+function WeakAuras.RaidFlagToIndex(flag)
+  return Private.combatlog_raidFlags[flag] or 0
+end
+
 local encounter_list = ""
 local zoneId_list = ""
 function Private.InitializeEncounterAndZoneLists()
@@ -170,14 +178,6 @@ local function get_zoneId_list()
     currentmap_zone_name,
     L["Supports multiple entries, separated by commas"]
   )
-end
-
-function WeakAuras.SpellSchool(school)
-  return Private.combatlog_spell_school_types[school] or ""
-end
-
-function WeakAuras.RaidFlagToIndex(flag)
-  return Private.combatlog_raidFlags[flag] or 0
 end
 
 Private.function_strings = {
@@ -638,7 +638,7 @@ WeakAuras.class_ids = {}
 WeakAuras.classes_sorted = {}
 for classID = 1, 20 do -- GetNumClasses not supported by wow classic
   local _, classFile = GetClassInfo(classID)
-  if classInfo then
+  if classFile then
     WeakAuras.class_ids[classFile] = classID
     tinsert(WeakAuras.classes_sorted, classFile)
   end
@@ -659,14 +659,6 @@ function WeakAuras.CheckTalentByIndex(index, extraOption)
     return not result
   end
   return result;
-end
-
-function WeakAuras.CheckClassSpec(class, test)
-  if type(class) == "string" or type(test) == "string" then
-    local spec = WeakAuras.LGT:GetUnitTalentSpec('player') or ""
-    return (class .. spec) == test
-  end
-  return false
 end
 
 function WeakAuras.CheckNumericIds(loadids, currentId)
@@ -752,10 +744,6 @@ Private.tinySecondFormat = function(value)
         return negSign .. ret
      end
   end
-end
-
-function Private.ExecEnv.GetSpecIcon(classspec)
-  return Private.spec[classspec] or ""
 end
 
 function Private.ExecEnv.ParseStringCheck(input)
@@ -898,22 +886,9 @@ function Private.ExecEnv.CheckRaidFlags(flags, flagToCheck)
   end
 end
 
-function WeakAuras.SpecForUnit(unit)
-  --local spec = WeakAuras.LGT:GetUnitTalentSpec(unit)
-  --local class = select(2, UnitClass(unit))
-  --return spec and class and (class .. spec)
-end
-
 function WeakAuras.IsSpellKnownForLoad(spell, exact)
-  local result = WeakAuras.IsSpellKnown(spell)
-  if exact or result then
-    return result
-  end
-  -- Dance through the spellname to the current spell id
-  spell = GetSpellInfo(spell)
-  if spell then
-    return WeakAuras.IsSpellKnown(spell)
-  end
+  if spell == 0 or spell >= 2^31 then return false end
+  return IsPlayerSpell(spell)
 end
 
 function WeakAuras.IsSpellKnown(spell, pet)
@@ -922,7 +897,7 @@ function WeakAuras.IsSpellKnown(spell, pet)
       if (pet) then
         return IsSpellKnown(spell, pet);
       end
-      return IsSpellKnown(spell);
+      return IsPlayerSpell(spell);
     else
       return (GetSpellInfo(spell)) and true or false
     end
@@ -934,9 +909,7 @@ function WeakAuras.IsSpellKnownIncludingPet(spell)
   if (not spell) then
     return false;
   end
-  if (WeakAuras.IsSpellKnown(spell) or WeakAuras.IsSpellKnown(spell, true)) then
-    return true;
-  end
+  return WeakAuras.IsSpellKnown(spell, false) or WeakAuras.IsSpellKnown(spell, true)
 end
 
 function WeakAuras.GetEffectiveAttackPower()
@@ -951,11 +924,6 @@ function WeakAuras.GetEffectiveSpellPower()
     spellPower = max(spellPower, GetSpellBonusDamage(i))
   end
   return spellPower
-end
-
-function WeakAuras.GetEffectiveRangedAttackPower()
-  local base, pos, neg = UnitRangedAttackPower("player")
-  return base + pos + neg
 end
 
 local function valuesForTalentFunction(trigger)
@@ -1335,7 +1303,8 @@ Private.load_prototype = {
       display = WeakAuras.newFeatureString .. L["Group Leader/Assist"],
       type = "multiselect",
       init = "arg",
-      events = {"PARTY_LEADER_CHANGED", "RAID_ROSTER_UPDATE"},
+      events = {"PARTY_LEADER_CHANGED", "GROUP_ROSTER_UPDATE"},
+      width = WeakAuras.doubleWidth,
       values = "group_member_types",
       test = "Private.ExecEnv.CheckGroupMemberType(%s, group_leader)",
       optional = true,
@@ -1351,8 +1320,8 @@ Private.load_prototype = {
       type = "string",
       multiline = true,
       init = "arg",
-      preamble = "local zoneChecker = Private.ExecEnv.ParseStringCheck(%q)",
-      test = "zoneChecker:Check(zone)",
+      preamble = "local checker = Private.ExecEnv.ParseStringCheck(%q)",
+      test = "checker:Check(zone)",
       events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD" },
       desc = function()
         return ("\n|cffffd200%s|r%s\n\n%s"):format(L["Current Zone\n"], GetRealZoneText(), L["Supports multiple entries, separated by commas. Prefix with '-' for negation."])
@@ -1611,6 +1580,16 @@ local function AddUnitEventForEvents(result, unit, event)
   end
 end
 
+local function AddTargetConditionEvents(result, useFocus)
+  if useFocus then
+    tinsert(result, "PLAYER_FOCUS_CHANGED")
+  end
+  tinsert(result, "PLAYER_TARGET_CHANGED")
+  return result
+end
+
+Private.AddTargetConditionEvents = AddTargetConditionEvents
+
 local unitHelperFunctions = {
   UnitChangedForceEventsWithPets = function(trigger)
     local events = {}
@@ -1691,6 +1670,12 @@ Private.event_categories = {
     name = L["Custom"],
   }
 }
+
+local GetNameAndIconForSpellName = function(trigger)
+  if type(trigger.spellName) == "table" then return end
+  local name, _, icon = GetSpellInfo(trigger.spellName)
+  return name, icon
+end
 
 Private.event_prototypes = {
   ["Combo Points"] = {
@@ -8270,18 +8255,6 @@ Private.event_prototypes = {
         display = L["Spell Power"],
         type = "number",
         init = "WeakAuras.GetEffectiveSpellPower()",
-        store = true,
-        conditionType = "number",
-        multiEntry = {
-          operator = "and",
-          limit = 2
-        },
-      },
-      {
-        name = "rangedattackpower",
-        display = L["Ranged Attack Power"],
-        type = "number",
-        init = "WeakAuras.GetEffectiveRangedAttackPower()",
         store = true,
         conditionType = "number",
         multiEntry = {
