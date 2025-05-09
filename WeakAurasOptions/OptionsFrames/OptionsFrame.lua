@@ -505,14 +505,6 @@ function OptionsPrivate.CreateFrame()
     changelogButton:SetPoint("LEFT", thanksButton, "RIGHT", 10, 0)
   end
 
-  local awesomeWotlkButton
-  if not WeakAuras.isAwesomeEnabled() then
-    awesomeWotlkButton = addFooter("Awesome WotLK", [[Interface\AddOns\WeakAuras\Media\Textures\GitHub.tga]], "https://github.com/FrostAtom/awesome_wotlk/releases",
-                                    L["Unlock nameplate anchoring & units in WeakAuras with the Awesome WotLK client patch"])
-    awesomeWotlkButton:SetParent(tipFrame)
-    awesomeWotlkButton:SetPoint("LEFT", changelogButton or thanksButton, "RIGHT", 10, 0)
-  end
-
   local reportbugButton = addFooter(L["Found a Bug?"], [[Interface\AddOns\WeakAuras\Media\Textures\bug_report.tga]], "https://github.com/NoM0Re/WeakAuras-WotLK/issues",
                                     L["Report bugs on our issue tracker."], nil, nil, true)
   reportbugButton:SetParent(tipFrame)

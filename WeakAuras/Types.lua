@@ -1750,7 +1750,7 @@ spec_frame:SetScript("OnEvent", update_specs);
 -- GetTotemInfo() only works for the first 5 totems
 Private.totem_types = {};
 local totemString = L["Totem #%i"];
-for i = 1, 5 do
+for i = 1, 4 do
   Private.totem_types[i] = totemString:format(i);
 end
 

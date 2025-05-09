@@ -1134,6 +1134,7 @@ Private.load_prototype = {
       sorted = true,
       sortOrder = Private.specs_sorted,
     },
+    --[[
     {
       name = "talent",
       display = L["Talent"],
@@ -1211,6 +1212,7 @@ Private.load_prototype = {
         ))
       end
     },
+    ]]
     {
       name = "spellknown",
       display = L["Spell Known"],
@@ -4041,14 +4043,14 @@ Private.event_prototypes = {
         spellName = trigger.spellName
         local ret = [[
           local spellName = %s
-          local icon = GetSpellIcon(spellName)
+          local icon = select(3,GetSpellInfo(spellName))
         ]]
         return string.format(ret, tonumber(spellName) or "nil");
       else
         spellName = type(trigger.spellName) == "number" and Private.ExecEnv.GetSpellName(trigger.spellName) or trigger.spellName;
         local ret = [[
           local spellName = %q
-          local icon = GetSpellIcon(spellName)
+          local icon = select(3,GetSpellInfo(spellName))
         ]]
         return string.format(ret, spellName or "");
       end
@@ -5912,7 +5914,7 @@ Private.event_prototypes = {
           end
         elseif inverse then -- inverse without a specific slot
           local found = false;
-          for i = 1, 5 do
+          for i = 1, 4 do
             local _, totemName, startTime, duration, icon = GetTotemInfo(i);
             if ((startTime and startTime ~= 0)
               and Private.ExecEnv.CheckTotemName(totemName, triggerTotemName, triggerTotemPattern, triggerTotemPatternOperator)
@@ -5929,10 +5931,10 @@ Private.event_prototypes = {
           state.name = triggerTotemName;
           state.totemName = triggerTotemName;
           if (triggerTotemName) then
-            state.icon = GetSpellIcon(triggerTotemName)
+            state.icon = select(3,GetSpellInfo(triggerTotemName))
           end
         else -- check all slots
-          for i = 1, 5 do
+          for i = 1, 4 do
             local _, totemName, startTime, duration, icon = GetTotemInfo(i);
             active = (startTime and startTime ~= 0);
 
@@ -6628,7 +6630,7 @@ Private.event_prototypes = {
       {
         name = "icon",
         hidden = true,
-        init = "GetSpellIcon(spellId or 0)",
+        init = "select(3,GetSpellInfo(spellId or 0)",
         store = true,
         test = "true"
       },
@@ -9036,7 +9038,8 @@ Private.event_prototypes = {
       },
     },
     iconFunc = function(trigger)
-      return GetSpellIcon(trigger.spellName or 0);
+      local icon = select(3,GetSpellInfo(trigger.spellName or 0))
+      return icon
     end,
     automaticrequired = true,
     progressType = "none"
