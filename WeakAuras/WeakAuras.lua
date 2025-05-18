@@ -901,26 +901,6 @@ local function LoadCustomActionFunctions(data)
   end
 end
 
-Private.talent_types_specific = {}
-Private.pvp_talent_types_specific = {}
-Private.CreateTalentCache = function()
-  local _, player_class = UnitClass("player")
-
-  Private.talent_types_specific[player_class] = Private.talent_types_specific[player_class] or {};
-
-  for tier = 1, MAX_NUM_TALENT_TIERS do
-    for column = 1, NUM_TALENT_COLUMNS do
-      -- Get name and icon info for the current talent of the current class and save it
-      local talentName, talentIcon = WeakAuras.GetMoPTalentInfo(tier, column)
-      local talentId = (tier-1)*3+column
-      -- Get the icon and name from the talent cache and record it in the table that will be used by WeakAurasOptions
-      if (talentName and talentIcon) then
-        Private.talent_types_specific[player_class][talentId] = "|T"..talentIcon..":0|t "..talentName
-      end
-    end
-  end
-end
-
 Private.CompanionData = {}
 -- use this function to not overwrite data from other companion compatible addons
 -- when using this function, do not name your global data table "WeakAurasCompanion"
@@ -1283,7 +1263,6 @@ loadedFrame:SetScript("OnEvent", function(self, event, ...)
         if remainingSquelch > 0 then
           timer:ScheduleTimer(function() squelch_actions = false; end, remainingSquelch); -- No sounds while loading
         end
-        Private.CreateTalentCache() -- It seems that GetTalentInfo might give info about whatever class was previously being played, until PLAYER_ENTERING_WORLD
         Private.UpdateCurrentInstanceType();
         Private.InitializeEncounterAndZoneLists()
       end
@@ -1291,8 +1270,6 @@ loadedFrame:SetScript("OnEvent", function(self, event, ...)
         isInitialLogin = true
         Private.PostAddCompanion()
       end
-    elseif(event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "CHARACTER_POINTS_CHANGED" or event == "SPELLS_CHANGED") then
-      callback = Private.CreateTalentCache;
     elseif(event == "PLAYER_REGEN_ENABLED") then
       callback = function()
         if (queueshowooc) then

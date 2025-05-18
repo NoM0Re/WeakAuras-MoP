@@ -9,7 +9,6 @@ local select, pairs, type = select, pairs, type
 local ceil = ceil
 
 -- WoW APIs
-local GetTalentInfo = GetTalentInfo
 local GetSpecialization = GetSpecialization
 local UnitClass = UnitClass
 local GetSpellInfo, GetItemInfo, GetItemCount, GetItemIcon = GetSpellInfo, GetItemInfo, GetItemCount, GetItemIcon
@@ -105,79 +104,6 @@ end
 
 function WeakAuras.RaidFlagToIndex(flag)
   return Private.combatlog_raidFlags[flag] or 0
-end
-
-local encounter_list = ""
-local zoneId_list = ""
-function Private.InitializeEncounterAndZoneLists()
-  if encounter_list ~= "" then
-    return
-  end
-
-  EJ_SelectTier(EJ_GetNumTiers())
-
-  for _, inRaid in ipairs({false, true}) do
-    local instance_index = 1
-    local instance_id = EJ_GetInstanceByIndex(instance_index, true)
-    local title = inRaid and L["Raids"] or L["Dungeons"]
-    zoneId_list = ("%s|cffffd200%s|r\n"):format(zoneId_list, title)
-
-    while instance_id do
-      EJ_SelectInstance(instance_id)
-      local instance_name, _, _, _, _, dungeonAreaMapID = EJ_GetInstanceInfo(instance_id)
-      local ej_index = 1
-      local boss, _, encounter_id  = EJ_GetEncounterInfoByIndex(ej_index)
-
-      zoneId_list = ("%s%s: %d\n"):format(zoneId_list, instance_name, dungeonAreaMapID)
-
-      -- Encounter ids
-      if inRaid then
-        while boss do
-          if encounter_id then
-            if instance_name then
-              encounter_list = ("%s|cffffd200%s|r\n"):format(encounter_list, instance_name)
-              instance_name = nil -- Only add it once per section
-            end
-            encounter_list = ("%s%s: %d\n"):format(encounter_list, boss, encounter_id)
-          end
-          ej_index = ej_index + 1
-          boss, _, encounter_id = EJ_GetEncounterInfoByIndex(ej_index, instance_id)
-        end
-        encounter_list = encounter_list .. "\n"
-      end
-
-      instance_index = instance_index + 1
-      instance_id = EJ_GetInstanceByIndex(instance_index, inRaid)
-    end
-    zoneId_list = zoneId_list .. "\n"
-  end
-
-  return encounter_list:sub(1, -3) .. "\n\n" .. L["Supports multiple entries, separated by commas\n"]
-end
-
-local function get_encounters_list()
-  return encounter_list
-end
-
-local function get_zoneId_list()
-  SetMapToCurrentZone()
-
-  local continent_id = GetCurrentMapContinent()
-  local zone_id = GetCurrentMapZone()
-  local map_area_id = GetCurrentMapAreaID()
-
-  local currentmap_name = GetMapInfo()
-  local currentmap_id = GetCurrentMapAreaID()
-  local currentmap_zone_name = ""
-
-  return ("%s|cffffd200%s|r%s: %d\n\n%s%s"):format(
-    zoneId_list,
-    L["Current Zone\n"],
-    currentmap_name,
-    currentmap_id,
-    currentmap_zone_name,
-    L["Supports multiple entries, separated by commas"]
-  )
 end
 
 Private.function_strings = {
@@ -646,19 +572,18 @@ end
 table.sort(WeakAuras.classes_sorted)
 
 function WeakAuras.CheckTalentByIndex(index, extraOption)
-  local tab = ceil(index / MAX_NUM_TALENTS)
-  local num_talent = (index - 1) % MAX_NUM_TALENTS + 1
-  local name, _, _, _, rank  = GetTalentInfo(tab, num_talent)
+  local name, _, _, _, selected  = WeakAuras.GetMoPTalentInfo(math.ceil(index / 3), (index - 1) % 3 + 1)
+  print(name, math.ceil(index / 3), (index - 1) % 3 + 1)
   if name == nil then
     return nil
   end
-  local result = rank and rank > 0
+  local result = selected
   if extraOption == 4 then
     return result
   elseif extraOption == 5 then
     return not result
   end
-  return result;
+  return result
 end
 
 function WeakAuras.CheckNumericIds(loadids, currentId)
@@ -932,7 +857,6 @@ local function valuesForTalentFunction(trigger)
     if not single_class then
       single_class = select(2, UnitClass("player"));
     end
-
     return Private.talentInfo[single_class]
   end
 end
@@ -1134,7 +1058,6 @@ Private.load_prototype = {
       sorted = true,
       sortOrder = Private.specs_sorted,
     },
-    --[[
     {
       name = "talent",
       display = L["Talent"],
@@ -1142,9 +1065,10 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE"},
-      inverse = nil,
-      extraOption = nil,
+      enableTest = function(trigger, talent, arg)
+        return WeakAuras.CheckTalentByIndex(talent, arg) ~= nil
+      end,
+      events = {"CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
       control = "WeakAurasMiniTalent",
       multiNoSingle = true, -- no single mode
       multiTristate = true, -- values can be true/false/nil
@@ -1165,9 +1089,10 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE"},
-      inverse = nil,
-      extraOption = nil,
+      enableTest = function(trigger, talent, arg)
+        return WeakAuras.CheckTalentByIndex(talent, arg) ~= nil
+      end,
+      events = {"CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
       control = "WeakAurasMiniTalent",
       multiNoSingle = true, -- no single mode
       multiTristate = true, -- values can be true/false/nil
@@ -1192,9 +1117,10 @@ Private.load_prototype = {
       values = valuesForTalentFunction,
       test = "WeakAuras.CheckTalentByIndex(%d, %d)",
       multiConvertKey = nil,
-      events = {"PLAYER_TALENT_UPDATE"},
-      inverse = nil,
-      extraOption = nil,
+      enableTest = function(trigger, talent, arg)
+        return WeakAuras.CheckTalentByIndex(talent, arg) ~= nil
+      end,
+      events = {"CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
       control = "WeakAurasMiniTalent",
       multiNoSingle = true, -- no single mode
       multiTristate = true, -- values can be true/false/nil
@@ -1212,7 +1138,6 @@ Private.load_prototype = {
         ))
       end
     },
-    ]]
     {
       name = "spellknown",
       display = L["Spell Known"],
@@ -5636,12 +5561,13 @@ Private.event_prototypes = {
   ["Talent Known"] = {
     type = "unit",
     events = {
-      ["events"] = {"PLAYER_TALENT_UPDATE", "SPELL_UPDATE_USABLE"}
+      ["events"] = {"CHARACTER_POINTS_CHANGED","PLAYER_TALENT_UPDATE", "SPELLS_CHANGED"}
     },
-    force_events = "PLAYER_TALENT_UPDATE",
+    internal_events = {"WA_DELAYED_PLAYER_ENTERING_WORLD"},
+    force_events = "CHARACTER_POINTS_CHANGED",
     name = L["Talent Known"],
     init = function(trigger)
-      local inverse = trigger.use_inverse
+      local inverse = false
       local ret = {}
       if (trigger.use_talent) then
         -- Single selection
@@ -5652,7 +5578,7 @@ Private.event_prototypes = {
           local tier = %s;
           local column = %s;
           local active = false
-          local name, icon, _, _, rank = GetTalentInfo(tier, column)
+          local name, icon, _, _, rank = Private.ExecEnv.GetTalentInfo(tier, column)
           if rank and rank > 0 then
             active = true;
             activeName = name;
@@ -5666,29 +5592,24 @@ Private.event_prototypes = {
         end
       elseif (trigger.use_talent == false) then
         if (trigger.talent.multi) then
-          table.insert(ret, [[
-            local active = true
-            local activeIcon, activeName, _
-          ]])
-          table.insert(ret, [[
-            local tier
-            local column
-          ]])
           for index, value in pairs(trigger.talent.multi) do
             local tier = index and ceil(index / MAX_NUM_TALENTS)
             local column = index and ((index - 1) % MAX_NUM_TALENTS + 1)
             table.insert(ret, ([[
-              if (not active) then
-                tier = %s
-                column = %s
-                local name, icon, _, _, rank = GetTalentInfo(tier, column)
-                if rank > 0 then
-                  active = true;
-                  activeName = name;
-                  activeIcon = icon;
+              local active = true
+              local activeIcon, activeName, _
+              local tier = %s
+              local column = %s
+              local shouldBeActive = %s
+              local name, icon, _, _, rank = WeakAuras.GetMoPTalentInfo(tier, column)
+              if name then
+                activeName = name
+                activeIcon = icon
+                if rank ~= shouldBeActive then
+                  active = false
                 end
               end
-            ]]):format(tier, column))
+            ]]):format(tier, column, value and "true" or "false"))
           end
           if (inverse) then
             table.insert(ret, [[
@@ -5706,10 +5627,15 @@ Private.event_prototypes = {
         type = "multiselect",
         values = function(trigger)
           local class = select(2, UnitClass("player"));
-          if Private.talent_types_specific and Private.talent_types_specific[class] then
-            return Private.talent_types_specific[class];
-          end
+          return Private.talentInfo[class]
         end,
+        multiUseControlWhenFalse = true,
+        multiAll = true,
+        multiNoSingle = true,
+        multiTristate = true, -- values can be true/false/nil
+        control = "WeakAurasMiniTalent",
+        multiConvertKey = nil,
+        enable = true,
         test = "active",
         reloadOptions = true,
       },
@@ -5718,6 +5644,8 @@ Private.event_prototypes = {
         display = L["Inverse"],
         type = "toggle",
         test = "true",
+        enable = false,
+        hidden = true,
       },
       {
         hidden = true,
