@@ -1272,7 +1272,7 @@ Private.load_prototype = {
       display = L["Zone ID(s)"],
       type = "string",
       events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE"},
-      desc = get_zoneId_list,
+      desc = Private.get_zoneId_list,
       preamble = "local zoneChecker = WeakAuras.ParseZoneCheck(%q)",
       test = "zoneChecker:Check(zoneId, zonegroupId)"
     },
@@ -1281,7 +1281,7 @@ Private.load_prototype = {
       display = L["Encounter ID(s)"],
       type = "string",
       init = "arg",
-      desc = get_encounters_list,
+      desc = Private.get_encounters_list,
       test = "WeakAuras.CheckNumericIds(%q, encounterid)",
       events = {"ENCOUNTER_START", "ENCOUNTER_END"}
     },
