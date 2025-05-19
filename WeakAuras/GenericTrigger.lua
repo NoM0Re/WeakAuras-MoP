@@ -1973,8 +1973,6 @@ do
       lastSwingMain, swingDurationMain, mainSwingOffset = nil, nil, nil;
     elseif(hand == "off") then
       lastSwingOff, swingDurationOff = nil, nil;
-    elseif(hand == "ranged") then
-      lastSwingRange, swingDurationRange = nil, nil;
     end
   end
 
