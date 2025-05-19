@@ -322,6 +322,8 @@ Off Screen]=] ] = "L'aura è fuori dallo schermo"
 	--[[Translation missing --]]
 	L["Disallow Entry Reordering"] = "Disallow Entry Reordering"
 	--[[Translation missing --]]
+	L["Discord"] = "Discord"
+	--[[Translation missing --]]
 	L["Display Name"] = "Display Name"
 	--[[Translation missing --]]
 	L["Display Text"] = "Display Text"
@@ -711,8 +713,6 @@ Bleed classification via LibDispel]=]
 	--[[Translation missing --]]
 	L["Is Unit"] = "Is Unit"
 	--[[Translation missing --]]
-	L["Join Discord"] = "Join Discord"
-	--[[Translation missing --]]
 	L["Justify"] = "Justify"
 	--[[Translation missing --]]
 	L["Keep Aspect Ratio"] = "Keep Aspect Ratio"
@@ -739,6 +739,7 @@ Bleed classification via LibDispel]=]
 	--[[Translation missing --]]
 	L["LibSerialize: Sanjo"] = "LibSerialize: Sanjo"
 	--[[Translation missing --]]
+	L["LibSpecialization: Funkeh"] = "LibSpecialization: Funkeh"
 	--[[Translation missing --]]
 	L["Limit"] = "Limit"
 	--[[Translation missing --]]
@@ -747,6 +748,8 @@ Bleed classification via LibDispel]=]
 	L["Linear Texture %s"] = "Linear Texture %s"
 	--[[Translation missing --]]
 	L["Linked aura: "] = "Linked aura: "
+	--[[Translation missing --]]
+	L["Linked Auras"] = "Linked Auras"
 	--[[Translation missing --]]
 	L["Load"] = "Load"
 	--[[Translation missing --]]
@@ -1020,9 +1023,7 @@ every 3 events starting from 2nd and ending at 11th: 2-11/3]=]
 	--[[Translation missing --]]
 	L["Required for Activation"] = "Required for Activation"
 	--[[Translation missing --]]
-	L["Requires LibGroupTalents, that is e.g. a up-to date WeakAuras version"] = "Requires LibGroupTalents, that is e.g. a up-to date WeakAuras version"
-	--[[Translation missing --]]
-	L["Requires syncing the specialization via LibGroupTalents."] = "Requires syncing the specialization via LibGroupTalents."
+	L["Requires LibSpecialization, that is e.g. a up-to date WeakAuras version"] = "Requires LibSpecialization, that is e.g. a up-to date WeakAuras version"
 	--[[Translation missing --]]
 	L["Reset all options to their default values."] = "Reset all options to their default values."
 	--[[Translation missing --]]

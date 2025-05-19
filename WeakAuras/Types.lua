@@ -13,7 +13,7 @@ local LBR_Base = LibBabbleRace:GetBaseLookupTable();
 local wipe, tinsert = wipe, tinsert
 local GetNumShapeshiftForms, GetShapeshiftFormInfo = GetNumShapeshiftForms, GetShapeshiftFormInfo
 local GetNumSpecializationsForClassID, GetSpecializationInfoForClassID = GetNumSpecializationsForClassID, GetSpecializationInfoForClassID
-local MAX_NUM_TALENTS = MAX_NUM_TALENTS or 20
+local WrapTextInColorCode = WrapTextInColorCode
 
 local function WA_GetClassColor(classFilename)
   local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[classFilename]
@@ -34,6 +34,9 @@ Private.glow_frame_types = {
   FRAMESELECTOR = L["Frame Selector"],
   PARENTFRAME = L["Parent Frame"]
 }
+if WeakAuras.IsAwesomeEnabled() then
+  Private.glow_frame_types.NAMEPLATE = L["Nameplate"]
+end
 
 Private.circular_group_constant_factor_types = {
   ANGLE = L["Angle and Radius"],
@@ -110,6 +113,7 @@ Private.big_number_types = {
   ["AbbreviateLargeNumbers"] = L["AbbreviateLargeNumbers (Blizzard)"],
   ["BreakUpLargeNumbers"] = L["BreakUpLargeNumbers (Blizzard)"],
 }
+
 Private.big_number_types_with_disable = CopyTable(Private.big_number_types)
 Private.big_number_types_with_disable["disable"] = L["Disabled"]
 
@@ -736,7 +740,7 @@ Private.format_types = {
           if unit and UnitPlayerControlled(unit) then
             local classFilename = select(2, UnitClass(unit))
             if classFilename then
-              return string.format("|c%s%s|r", WA_GetClassColor(classFilename), text)
+              return WrapTextInColorCode(text, WA_GetClassColor(classFilename))
             end
           end
           return text
@@ -745,7 +749,7 @@ Private.format_types = {
 
       if realm == "never" then
         nameFunc = function(unit)
-          return unit and WeakAuras.UnitName(unit)
+          return unit and WeakAuras.UnitName(unit) or ""
         end
       elseif realm == "star" then
         nameFunc = function(unit)
@@ -756,7 +760,7 @@ Private.format_types = {
           if realm then
             return name .. "*"
           end
-          return name
+          return name or ""
         end
       elseif realm == "differentServer" then
         nameFunc = function(unit)
@@ -767,7 +771,7 @@ Private.format_types = {
           if realm then
             return name .. "-" .. realm
           end
-          return name
+          return name or ""
         end
       elseif realm == "always" then
         nameFunc = function(unit)
@@ -895,7 +899,7 @@ Private.format_types = {
       if color == "class" then
         colorFunc = function(class, text)
           if class then
-            return string.format("|c%s%s|r", WA_GetClassColor(class), text)
+            return WrapTextInColorCode(text, WA_GetClassColor(class))
           else
             return text
           end
@@ -1091,7 +1095,6 @@ Private.format_types = {
 Private.format_types_display = {}
 for k, v in pairs(Private.format_types) do Private.format_types_display[k] = v.display end
 
-
 Private.sound_channel_types = {
   Master = L["Master"],
   SFX = ENABLE_SOUNDFX,
@@ -1176,6 +1179,9 @@ Private.unit_types_bufftrigger_2 = WeakAuras.Mixin({
   member = L["Specific Unit"],
   multi = L["Multi-target"]
 }, target_unit_types)
+if WeakAuras.IsAwesomeEnabled() then
+  Private.unit_types_bufftrigger_2.nameplate = L["Nameplate"]
+end
 
 Private.actual_unit_types = WeakAuras.Mixin({
   player = L["Player"],
@@ -1198,6 +1204,9 @@ Private.actual_unit_types_cast = WeakAuras.Mixin({
   pet = L["Pet"],
   member = L["Specific Unit"],
 }, target_unit_types)
+if WeakAuras.IsAwesomeEnabled() then
+  Private.actual_unit_types_cast.nameplate = L["Nameplate"]
+end
 
 Private.actual_unit_types_cast_tooltip = L["• |cff00ff00Player|r, |cff00ff00Target|r, |cff00ff00Focus|r, and |cff00ff00Pet|r correspond directly to those individual unitIDs.\n• |cff00ff00Specific Unit|r lets you provide a specific valid unitID to watch.\n|cffff0000Note|r: The game will not fire events for all valid unitIDs, making some untrackable by this trigger.\n• |cffffff00Party|r, |cffffff00Raid|r, |cffffff00Boss|r, |cffffff00Arena|r, and |cffffff00Nameplate|r can match multiple corresponding unitIDs.\n• |cffffff00Smart Group|r adjusts to your current group type, matching just the \"player\" when solo, \"party\" units (including \"player\") in a party or \"raid\" units in a raid.\n\n|cffffff00*|r Yellow Unit settings will create clones for each matching unit while this trigger is providing Dynamic Info to the Aura."]
 
@@ -1206,6 +1215,9 @@ Private.threat_unit_types = WeakAuras.Mixin({
   member = L["Specific Unit"],
   none = L["At Least One Enemy"]
 }, target_unit_types)
+if WeakAuras.IsAwesomeEnabled() then
+  Private.threat_unit_types.nameplate = L["Nameplate"]
+end
 
 Private.unit_types_range_check = WeakAuras.Mixin({
   pet = L["Pet"],
@@ -1350,6 +1362,9 @@ Private.anchor_frame_types = {
   UNITFRAME = L["Unit Frames"],
   CUSTOM = L["Custom"]
 }
+if WeakAuras.IsAwesomeEnabled() then
+  Private.anchor_frame_types.NAMEPLATE = L["Nameplates"]
+end
 
 Private.anchor_frame_types_group = {
   SCREEN = L["Screen/Parent Group"],
@@ -1594,7 +1609,7 @@ Private.item_quality_types = {
 }
 
 local function InitializeCurrencies()
-  if Private.discovered_currencies then
+  if Private.discovered_currencies and next(Private.discovered_currencies) then
     return
   end
   Private.discovered_currencies = {}
@@ -1649,6 +1664,124 @@ end
 Private.GetDiscoveredCurrenciesHeaders  = function()
   InitializeCurrencies()
   return Private.discovered_currencies_headers
+end
+
+Private.ExecEnv.GetFactionDataByIndex = function(index)
+  local name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild = GetFactionInfo(index)
+  return {
+    factionID = name and Private.faction_to_id[name] or 0,
+    name = name,
+    description = description,
+    reaction = standingID,
+    currentReactionThreshold = barMin,
+    nextReactionThreshold = barMax,
+    currentStanding = barValue,
+    atWarWith = atWarWith or false,
+    canToggleAtWar = canToggleAtWar,
+    isChild = isChild,
+    isHeader = isHeader,
+    isHeaderWithRep = hasRep,
+    isCollapsed = isCollapsed,
+    isWatched = isWatched,
+  }
+end
+
+Private.ExecEnv.GetFactionDataByID = function(ID)
+  local factionName = ID and Private.id_to_faction[ID]
+  if factionName then
+    for index = 1, GetNumFactions() do
+      local name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild = GetFactionInfo(index)
+      if name == factionName then
+        return {
+          factionID = ID,
+          name = name,
+          description = description,
+          reaction = standingID,
+          currentReactionThreshold = barMin,
+          nextReactionThreshold = barMax,
+          currentStanding = barValue,
+          atWarWith = atWarWith or false,
+          canToggleAtWar = canToggleAtWar,
+          isChild = isChild,
+          isHeader = isHeader,
+          isHeaderWithRep = hasRep,
+          isCollapsed = isCollapsed,
+          isWatched = isWatched,
+        }
+      end
+    end
+  end
+end
+
+Private.ExecEnv.GetWatchedFactionId = function()
+  local factionName = GetWatchedFactionInfo()
+  return factionName and Private.faction_to_id[factionName]
+end
+
+local function InitializeReputations()
+  if Private.reputations and next(Private.reputations) then
+    return
+  end
+
+  Private.reputations = {}
+  Private.reputations_sorted = {}
+  Private.reputations_headers = {}
+
+  -- Dynamic expansion of all collapsed headers
+  local collapsed = {}
+  local index = 1
+  while index <= GetNumFactions() do
+    local factionData = Private.ExecEnv.GetFactionDataByIndex(index)
+    if factionData and factionData.isHeader and factionData.isCollapsed then
+      ExpandFactionHeader(index)
+      collapsed[factionData.name] = true
+    end
+    index = index + 1
+  end
+
+  -- Process all faction data
+  for i = 1, GetNumFactions() do
+    local factionData = Private.ExecEnv.GetFactionDataByIndex(i)
+    if factionData then
+      if factionData.currentStanding > 0 or not factionData.isHeader then
+        local factionID = factionData.factionID
+        if factionID then
+          Private.reputations[factionID] = factionData.name
+          Private.reputations_sorted[factionID] = i
+        end
+      else
+        local name = factionData.name
+        if name then
+          Private.reputations[name] = name
+          Private.reputations_sorted[name] = i
+          Private.reputations_headers[name] = true
+        end
+      end
+    end
+  end
+
+  -- Collapse headers back to their original state
+  for i = GetNumFactions(), 1, -1 do
+    local factionData = Private.ExecEnv.GetFactionDataByIndex(i)
+    if factionData and collapsed[factionData.name] then
+      CollapseFactionHeader(i)
+    end
+  end
+end
+
+Private.GetReputations = function()
+  InitializeReputations()
+  return Private.reputations
+end
+
+Private.GetReputationsSorted  = function()
+  InitializeReputations()
+  return Private.reputations_sorted
+end
+
+Private.GetReputationsHeaders  = function()
+  InitializeReputations()
+  return Private.reputations_headers
 end
 
 Private.combatlog_raid_mark_check_type = {
@@ -2330,11 +2463,6 @@ Private.eventend_types = {
   ["custom"] = L["Custom"]
 }
 
-Private.autoeventend_types = {
-  ["auto"] = L["Automatic"],
-  ["custom"] = L["Custom"]
-}
-
 Private.timedeventend_types = {
   ["timed"] = L["Timed"],
 }
@@ -2602,7 +2730,134 @@ Private.classification_types = {
   elite = L["Elite"],
   rare = L["Rare"],
   normal = L["Normal"],
-  trivial = L["Trivial (Low Level)"],
+  trivial = L["Trivial (Low Level)"]
+}
+if WeakAuras.IsAwesomeEnabled() then
+  Private.classification_types.minus = L["Minus (Small Nameplate)"]
+end
+
+Private.creature_type_types = {
+  [1] = L["Beast"],
+  [2] = L["Dragonkin"],
+  [3] = L["Demon"],
+  [4] = L["Elemental"],
+  [5] = L["Giant"],
+  [6] = L["Undead"],
+  [7] = L["Humanoid"],
+  [8] = L["Critter"],
+  [9] = L["Mechanical"],
+  [10] = L["Not specified"],
+  [11] = L["Totem"],
+  [12] = L["Non-combat Pet"],
+  [13] = L["Gas Cloud"],
+  [14] = L["Wild Pet"],
+  [15] = L["Aberration"],
+}
+
+Private.ExecEnv.creature_type_name_to_id = {
+  [L["Beast"]] = 1,
+  [L["Dragonkin"]] = 2,
+  [L["Demon"]] = 3,
+  [L["Elemental"]] = 4,
+  [L["Giant"]] = 5,
+  [L["Undead"]] = 6,
+  [L["Humanoid"]] = 7,
+  [L["Critter"]] = 8,
+  [L["Mechanical"]] = 9,
+  [L["Not specified"]] = 10,
+  [L["Totem"]] = 11,
+  [L["Non-combat Pet"]] = 12,
+  [L["Gas Cloud"]] = 13,
+  [L["Wild Pet"]] = 14,
+  [L["Aberration"]] = 15,
+}
+
+Private.creature_family_types = {
+  [1] = L["Wolf"],
+  [2] = L["Cat"],
+  [3] = L["Spider"],
+  [4] = L["Bear"],
+  [5] = L["Boar"],
+  [6] = L["Crocolisk"],
+  [7] = L["Carrion Bird"],
+  [8] = L["Crab"],
+  [9] = L["Gorilla"],
+  [11] = L["Raptor"],
+  [12] = L["Tallstrider"],
+  [15] = L["Felhunter"],
+  [16] = L["Voidwalker"],
+  [17] = L["Succubus"],
+  [19] = L["Doomguard"],
+  [20] = L["Scorpid"],
+  [21] = L["Turtle"],
+  [23] = L["Imp"],
+  [24] = L["Bat"],
+  [25] = L["Hyena"],
+  [26] = L["Bird of Prey"],
+  [27] = L["Wind Serpent"],
+  [28] = L["Remote Control"],
+  [29] = L["Felguard"],
+  [30] = L["Dragonhawk"],
+  [31] = L["Ravager"],
+  [32] = L["Warp Stalker"],
+  [33] = L["Sporebat"],
+  [34] = L["Nether Ray"],
+  [35] = L["Serpent"],
+  [37] = L["Moth"],
+  [38] = L["Chimaera"],
+  [39] = L["Devilsaur"],
+  [40] = L["Ghoul"],
+  [41] = L["Silithid"],
+  [42] = L["Worm"],
+  [43] = L["Rhino"],
+  [44] = L["Wasp"],
+  [45] = L["Core Hound"],
+  [46] = L["Spirit Beast"],
+  [302] = L["Incubus"],
+}
+
+Private.ExecEnv.creature_family_name_to_id = {
+  [L["Wolf"]] = 1,
+  [L["Cat"]] = 2,
+  [L["Spider"]] = 3,
+  [L["Bear"]] = 4,
+  [L["Boar"]] = 5,
+  [L["Crocolisk"]] = 6,
+  [L["Carrion Bird"]] = 7,
+  [L["Crab"]] = 8,
+  [L["Gorilla"]] = 9,
+  [L["Raptor"]] = 11,
+  [L["Tallstrider"]] = 12,
+  [L["Felhunter"]] = 15,
+  [L["Voidwalker"]] = 16,
+  [L["Succubus"]] = 17,
+  [L["Doomguard"]] = 19,
+  [L["Scorpid"]] = 20,
+  [L["Turtle"]] = 21,
+  [L["Imp"]] = 23,
+  [L["Bat"]] = 24,
+  [L["Hyena"]] = 25,
+  [L["Bird of Prey"]] = 26,
+  [L["Wind Serpent"]] = 27,
+  [L["Remote Control"]] = 28,
+  [L["Felguard"]] = 29,
+  [L["Dragonhawk"]] = 30,
+  [L["Ravager"]] = 31,
+  [L["Warp Stalker"]] = 32,
+  [L["Sporebat"]] = 33,
+  [L["Nether Ray"]] = 34,
+  [L["Serpent"]] = 35,
+  [L["Moth"]] = 37,
+  [L["Chimaera"]] = 38,
+  [L["Devilsaur"]] = 39,
+  [L["Ghoul"]] = 40,
+  [L["Silithid"]] = 41,
+  [L["Worm"]] = 42,
+  [L["Rhino"]] = 43,
+  [L["Wasp"]] = 44,
+  [L["Core Hound"]] = 45,
+  [L["Spirit Beast"]] = 46,
+  [L["Incubus"]] = 302,
 }
 
 Private.anim_start_preset_types = {
@@ -2690,7 +2945,7 @@ Private.send_chat_message_types = {
   RAID = L["Raid"],
   SMARTRAID = L["BG>Raid>Party>Say"],
   RAID_WARNING = L["Raid Warning"],
-  INSTANCE_CHAT = L["Instance"],
+  BATTLEGROUND = L["Battleground"],
   COMBAT = L["Blizzard Combat Text"],
   PRINT = L["Chat Frame"],
   ERROR = L["Error Frame"]
@@ -3502,7 +3757,7 @@ Private.baseUnitId = {
   ["target"] = true,
   ["pet"] = true,
   ["focus"] = true,
-  ["vehicle"] = true,
+  ["vehicle"] = true
 }
 
 Private.multiUnitId = {
@@ -3516,6 +3771,9 @@ Private.multiUnitId = {
   ["partypetsonly"] = true,
   ["raid"] = true,
 }
+if WeakAuras.IsAwesomeEnabled() then
+  Private.multiUnitId["nameplate"] = true
+end
 
 Private.multiUnitUnits = {
   ["boss"] = {},
@@ -3524,6 +3782,9 @@ Private.multiUnitUnits = {
   ["party"] = {},
   ["raid"] = {}
 }
+if WeakAuras.IsAwesomeEnabled() then
+  Private.multiUnitUnits["nameplate"] = {}
+end
 
 Private.multiUnitUnits.group["player"] = true
 Private.multiUnitUnits.party["player"] = true
@@ -3540,11 +3801,10 @@ for i = 1, 4 do
   Private.multiUnitUnits.party["partypet"..i] = true
 end
 
-for i = 1, 10 do
+for i = 1, MAX_BOSS_FRAMES do
   Private.baseUnitId["boss"..i] = true
   Private.multiUnitUnits.boss["boss"..i] = true
 end
-
 for i = 1, 5 do
   Private.baseUnitId["arena"..i] = true
   Private.multiUnitUnits.arena["arena"..i] = true
@@ -3557,6 +3817,12 @@ for i = 1, 40 do
   Private.multiUnitUnits.raid["raid"..i] = true
   Private.multiUnitUnits.group["raidpet"..i] = true
   Private.multiUnitUnits.raid["raidpet"..i] = true
+end
+if WeakAuras.IsAwesomeEnabled() then
+  for i = 1, 100 do
+    Private.baseUnitId["nameplate"..i] = true
+    Private.multiUnitUnits.nameplate["nameplate"..i] = true
+  end
 end
 
 Private.dbm_types = {
@@ -3676,4 +3942,184 @@ WeakAuras.StopMotion.animation_types = {
   bounce = L["Forward, Reverse Loop"],
   once = L["Forward"],
   progress = L["Progress"]
+}
+
+Private.id_to_faction = {
+  ["21"] = L["Booty Bay"],
+  ["47"] = L["Ironforge"],
+  ["54"] = L["Gnomeregan"],
+  ["59"] = L["Thorium Brotherhood"],
+  ["67"] = L["Horde"],
+  ["68"] = L["Undercity"],
+  ["69"] = L["Darnassus"],
+  ["70"] = L["Syndicate"],
+  ["72"] = L["Stormwind"],
+  ["76"] = L["Orgrimmar"],
+  ["81"] = L["Thunder Bluff"],
+  ["87"] = L["Bloodsail Buccaneers"],
+  ["92"] = L["Gelkis Clan Centaur"],
+  ["93"] = L["Magram Clan Centaur"],
+  ["270"] = L["Zandalar Tribe"],
+  ["349"] = L["Ravenholdt"],
+  ["369"] = L["Gadgetzan"],
+  ["469"] = L["Alliance"],
+  ["470"] = L["Ratchet"],
+  ["509"] = L["The League of Arathor"],
+  ["510"] = L["The Defilers"],
+  ["529"] = L["Argent Dawn"],
+  ["530"] = L["Darkspear Trolls"],
+  ["576"] = L["Timbermaw Hold"],
+  ["577"] = L["Everlook"],
+  ["589"] = L["Wintersaber Trainers"],
+  ["609"] = L["Cenarion Circle"],
+  ["729"] = L["Frostwolf Clan"],
+  ["730"] = L["Stormpike Guard"],
+  ["749"] = L["Hydraxian Waterlords"],
+  ["809"] = L["Shen'dralar"],
+  ["889"] = L["Warsong Outriders"],
+  ["890"] = L["Silverwing Sentinels"],
+  ["909"] = L["Darkmoon Faire"],
+  ["910"] = L["Brood of Nozdormu"],
+  ["911"] = L["Silvermoon City"],
+  ["922"] = L["Tranquillien"],
+  ["930"] = L["Exodar"],
+  ["932"] = L["The Aldor"],
+  ["933"] = L["The Consortium"],
+  ["934"] = L["The Scryers"],
+  ["935"] = L["The Sha'tar"],
+  ["941"] = L["The Mag'har"],
+  ["942"] = L["Cenarion Expedition"],
+  ["946"] = L["Honor Hold"],
+  ["947"] = L["Thrallmar"],
+  ["967"] = L["The Violet Eye"],
+  ["970"] = L["Sporeggar"],
+  ["978"] = L["Kurenai"],
+  ["989"] = L["Keepers of Time"],
+  ["990"] = L["The Scale of the Sands"],
+  ["1011"] = L["Lower City"],
+  ["1012"] = L["Ashtongue Deathsworn"],
+  ["1015"] = L["Netherwing"],
+  ["1031"] = L["Sha'tari Skyguard"],
+  ["1037"] = L["Alliance Vanguard"],
+  ["1038"] = L["Ogri'la"],
+  ["1050"] = L["Valiance Expedition"],
+  ["1052"] = L["Horde Expedition"],
+  ["1064"] = L["The Taunka"],
+  ["1067"] = L["The Hand of Vengeance"],
+  ["1068"] = L["Explorers' League"],
+  ["1073"] = L["The Kalu'ak"],
+  ["1077"] = L["Shattered Sun Offensive"],
+  ["1085"] = L["Warsong Offensive"],
+  ["1090"] = L["Kirin Tor"],
+  ["1091"] = L["The Wyrmrest Accord"],
+  ["1094"] = L["The Silver Covenant"],
+  ["1098"] = L["Knights of the Ebon Blade"],
+  ["1104"] = L["Frenzyheart Tribe"],
+  ["1105"] = L["The Oracles"],
+  ["1106"] = L["Argent Crusade"],
+  ["1119"] = L["The Sons of Hodir"],
+  ["1124"] = L["The Sunreavers"],
+  ["1126"] = L["The Frostborn"],
+  ["1133"] = L["Bilgewater Cartel"],
+  ["1134"] = L["Gilneas"],
+  ["1135"] = L["The Earthen Ring"],
+  ["1156"] = L["The Ashen Verdict"],
+  ["1158"] = L["Guardians of Hyjal"],
+  ["1171"] = L["Therazane"],
+  ["1172"] = L["Dragonmaw Clan"],
+  ["1173"] = L["Ramkahen"],
+  ["1174"] = L["Wildhammer Clan"],
+  ["1177"] = L["Baradin's Wardens"],
+  ["1178"] = L["Hellscream's Reach"],
+  ["10000"] = L["Winterfin Retreat"],
+}
+
+Private.faction_to_id = {
+  [L["Booty Bay"]] = 21,
+  [L["Ironforge"]] = 47,
+  [L["Gnomeregan"]] = 54,
+  [L["Thorium Brotherhood"]] = 59,
+  [L["Horde"]] = 67,
+  [L["Undercity"]] = 68,
+  [L["Darnassus"]] = 69,
+  [L["Syndicate"]] = 70,
+  [L["Stormwind"]] = 72,
+  [L["Orgrimmar"]] = 76,
+  [L["Thunder Bluff"]] = 81,
+  [L["Bloodsail Buccaneers"]] = 87,
+  [L["Gelkis Clan Centaur"]] = 92,
+  [L["Magram Clan Centaur"]] = 93,
+  [L["Zandalar Tribe"]] = 270,
+  [L["Ravenholdt"]] = 349,
+  [L["Gadgetzan"]] = 369,
+  [L["Alliance"]] = 469,
+  [L["Ratchet"]] = 470,
+  [L["The League of Arathor"]] = 509,
+  [L["The Defilers"]] = 510,
+  [L["Argent Dawn"]] = 529,
+  [L["Darkspear Trolls"]] = 530,
+  [L["Timbermaw Hold"]] = 576,
+  [L["Everlook"]] = 577,
+  [L["Wintersaber Trainers"]] = 589,
+  [L["Cenarion Circle"]] = 609,
+  [L["Frostwolf Clan"]] = 729,
+  [L["Stormpike Guard"]] = 730,
+  [L["Hydraxian Waterlords"]] = 749,
+  [L["Shen'dralar"]] = 809,
+  [L["Warsong Outriders"]] = 889,
+  [L["Silverwing Sentinels"]] = 890,
+  [L["Darkmoon Faire"]] = 909,
+  [L["Brood of Nozdormu"]] = 910,
+  [L["Silvermoon City"]] = 911,
+  [L["Tranquillien"]] = 922,
+  [L["Exodar"]] = 930,
+  [L["The Aldor"]] = 932,
+  [L["The Consortium"]] = 933,
+  [L["The Scryers"]] = 934,
+  [L["The Sha'tar"]] = 935,
+  [L["The Mag'har"]] = 941,
+  [L["Cenarion Expedition"]] = 942,
+  [L["Honor Hold"]] = 946,
+  [L["Thrallmar"]] = 947,
+  [L["The Violet Eye"]] = 967,
+  [L["Sporeggar"]] = 970,
+  [L["Kurenai"]] = 978,
+  [L["Keepers of Time"]] = 989,
+  [L["The Scale of the Sands"]] = 990,
+  [L["Lower City"]] = 1011,
+  [L["Ashtongue Deathsworn"]] = 1012,
+  [L["Netherwing"]] = 1015,
+  [L["Sha'tari Skyguard"]] = 1031,
+  [L["Alliance Vanguard"]] = 1037,
+  [L["Ogri'la"]] = 1038,
+  [L["Valiance Expedition"]] = 1050,
+  [L["Horde Expedition"]] = 1052,
+  [L["The Taunka"]] = 1064,
+  [L["The Hand of Vengeance"]] = 1067,
+  [L["Explorers' League"]] = 1068,
+  [L["The Kalu'ak"]] = 1073,
+  [L["Shattered Sun Offensive"]] = 1077,
+  [L["Warsong Offensive"]] = 1085,
+  [L["Kirin Tor"]] = 1090,
+  [L["The Wyrmrest Accord"]] = 1091,
+  [L["The Silver Covenant"]] = 1094,
+  [L["Knights of the Ebon Blade"]] = 1098,
+  [L["Frenzyheart Tribe"]] = 1104,
+  [L["The Oracles"]] = 1105,
+  [L["Argent Crusade"]] = 1106,
+  [L["The Sons of Hodir"]] = 1119,
+  [L["The Sunreavers"]] = 1124,
+  [L["The Frostborn"]] = 1126,
+  [L["Bilgewater Cartel"]] = 1133,
+  [L["Gilneas"]] = 1134,
+  [L["The Earthen Ring"]] = 1135,
+  [L["The Ashen Verdict"]] = 1156,
+  [L["Guardians of Hyjal"]] = 1158,
+  [L["Therazane"]] = 1171,
+  [L["Dragonmaw Clan"]] = 1172,
+  [L["Ramkahen"]] = 1173,
+  [L["Wildhammer Clan"]] = 1174,
+  [L["Baradin's Wardens"]] = 1177,
+  [L["Hellscream's Reach"]] = 1178,
+  [L["Winterfin Retreat"]] = 10000,
 }

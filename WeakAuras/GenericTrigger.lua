@@ -76,9 +76,6 @@ local ConstructTest, ConstructFunction
 
 local nameplateExists = {}
 
----@param unit UnitToken
----@param smart? boolean
----@return boolean unitExists
 function WeakAuras.UnitExistsFixed(unit, smart)
   if #unit > 9 and unit:sub(1, 9) == "nameplate" then
     return nameplateExists[unit]
@@ -666,12 +663,12 @@ local function RunTriggerFunc(allStates, data, id, triggernum, event, arg1, arg2
       else
         ok, returnValue = pcall(data.triggerFunc, allStates, event, arg1, arg2, ...);
       end
-      if (ok and (returnValue or (returnValue ~= false and allStates.__changed))) then
+      if (ok and (returnValue or (returnValue ~= false and allStates:IsChanged()))) then
         updateTriggerState = true;
       elseif not ok then
         errorHandler(returnValue)
       end
-      allStates.__changed = nil
+      allStates:SetChanged()
       for key, state in pairs(allStates) do
         if (type(state) ~= "table") then
           errorHandler(string.format(L["All States table contains a non table at key: '%s'."], key))
@@ -686,7 +683,7 @@ local function RunTriggerFunc(allStates, data, id, triggernum, event, arg1, arg2
       else
         ok, returnValue = pcall(data.triggerFunc, allStates, event, arg1, arg2, ...);
       end
-      if (ok and returnValue) or optionsEvent then
+      if( (ok and returnValue) or optionsEvent) then
         for id, state in pairs(allStates) do
           if (state.changed) then
             if (Private.ActivateEvent(id, triggernum, data, state)) then
@@ -776,7 +773,7 @@ local function RunTriggerFunc(allStates, data, id, triggernum, event, arg1, arg2
       if (data.statesParameter == "all") then
         if data.untriggerFunc then
           local ok, returnValue = pcall(data.untriggerFunc, allStates, event, arg1, arg2, ...);
-          if (ok and returnValue) or optionsEvent then
+          if ok and returnValue then
             for id, state in pairs(allStates) do
               if (state.changed) then
                 if (Private.EndEvent(state)) then
@@ -804,7 +801,7 @@ local function RunTriggerFunc(allStates, data, id, triggernum, event, arg1, arg2
             end
           end
         end
-        if not updateTriggerState and not allStates[cloneIdForUnitTrigger].show then
+        if not updateTriggerState and not (allStates[cloneIdForUnitTrigger] and allStates[cloneIdForUnitTrigger].show) then
           -- We added this state automatically, but the trigger didn't end up using it,
           -- so remove it again
           allStates[cloneIdForUnitTrigger] = nil
@@ -1222,7 +1219,7 @@ end
 
 function GenericTrigger.UnloadDisplays(toUnload)
   for id in pairs(toUnload) do
-    loaded_auras[id] = false;
+    loaded_auras[id] = nil
     for eventname, events in pairs(loaded_events) do
       if(eventname == "COMBAT_LOG_EVENT_UNFILTERED") then
         for subeventname, subevents in pairs(events) do
@@ -1250,7 +1247,7 @@ frame.unitFrames = {};
 Private.frames["WeakAuras Generic Trigger Frame"] = frame;
 frame:RegisterEvent("PLAYER_ENTERING_WORLD");
 genericTriggerRegisteredEvents["PLAYER_ENTERING_WORLD"] = true;
-if WeakAuras.isAwesomeEnabled() then
+if WeakAuras.IsAwesomeEnabled() then
   frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
   frame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
   genericTriggerRegisteredEvents["NAME_PLATE_UNIT_ADDED"] = true;
@@ -1259,7 +1256,8 @@ end
 frame:SetScript("OnEvent", HandleEvent);
 
 function GenericTrigger.Delete(id)
-  GenericTrigger.UnloadDisplays({[id] = true});
+  events[id] = nil
+  watched_trigger_events[id] = nil
 end
 
 function GenericTrigger.Rename(oldid, newid)
@@ -1632,7 +1630,7 @@ function GenericTrigger.Add(data, region)
             triggerFuncStr = ConstructFunction(prototype, trigger);
 
             statesParameter = prototype.statesParameter;
-            triggerFunc = Private.LoadFunction(triggerFuncStr);
+            triggerFunc = Private.LoadFunction(triggerFuncStr, id);
 
             durationFunc = prototype.durationFunc;
             nameFunc = prototype.nameFunc;
@@ -1709,44 +1707,44 @@ function GenericTrigger.Add(data, region)
             end
           end
         else -- CUSTOM
-          triggerFunc = WeakAuras.LoadFunction("return "..(trigger.custom or ""));
+          triggerFunc = WeakAuras.LoadFunction("return "..(trigger.custom or ""), data.id);
           if (trigger.custom_type == "stateupdate") then
-            tsuConditionVariables = WeakAuras.LoadFunction("return function() return \n" .. (trigger.customVariables or "") .. "\n end");
+            tsuConditionVariables = WeakAuras.LoadFunction("return function() return \n" .. (trigger.customVariables or "") .. "\n end", data.id);
             if not tsuConditionVariables then
               tsuConditionVariables = function() end
             end
           end
 
           if(trigger.custom_type == "status" or trigger.custom_type == "event" and trigger.custom_hide == "custom") then
-            untriggerFunc = WeakAuras.LoadFunction("return "..(untrigger.custom or ""));
+            untriggerFunc = WeakAuras.LoadFunction("return "..(untrigger.custom or ""), data.id);
             if (not untriggerFunc) then
               untriggerFunc = trueFunction;
             end
           end
 
           if(trigger.custom_type ~= "stateupdate" and trigger.customDuration and trigger.customDuration ~= "") then
-            durationFunc = WeakAuras.LoadFunction("return "..trigger.customDuration);
+            durationFunc = WeakAuras.LoadFunction("return "..trigger.customDuration, data.id);
           end
           if(trigger.custom_type ~= "stateupdate") then
             overlayFuncs = {};
             for i = 1, 7 do
               local property = "customOverlay" .. i;
               if (trigger[property] and trigger[property] ~= "") then
-                overlayFuncs[i] = WeakAuras.LoadFunction("return ".. trigger[property]);
+                overlayFuncs[i] = WeakAuras.LoadFunction("return ".. trigger[property], data.id);
               end
             end
           end
           if(trigger.custom_type ~= "stateupdate" and trigger.customName and trigger.customName ~= "") then
-            nameFunc = WeakAuras.LoadFunction("return "..trigger.customName);
+            nameFunc = WeakAuras.LoadFunction("return "..trigger.customName, data.id);
           end
           if(trigger.custom_type ~= "stateupdate" and trigger.customIcon and trigger.customIcon ~= "") then
-            iconFunc = WeakAuras.LoadFunction("return "..trigger.customIcon);
+            iconFunc = WeakAuras.LoadFunction("return "..trigger.customIcon, data.id);
           end
           if(trigger.custom_type ~= "stateupdate" and trigger.customTexture and trigger.customTexture ~= "") then
-            textureFunc = WeakAuras.LoadFunction("return "..trigger.customTexture);
+            textureFunc = WeakAuras.LoadFunction("return "..trigger.customTexture, data.id);
           end
           if(trigger.custom_type ~= "stateupdate" and trigger.customStacks and trigger.customStacks ~= "") then
-            stacksFunc = WeakAuras.LoadFunction("return "..trigger.customStacks);
+            stacksFunc = WeakAuras.LoadFunction("return "..trigger.customStacks, data.id);
           end
 
           if((trigger.custom_type == "status" or trigger.custom_type == "stateupdate") and trigger.check == "update") then
@@ -1975,7 +1973,8 @@ do
       lastSwingMain, swingDurationMain, mainSwingOffset = nil, nil, nil;
     elseif(hand == "off") then
       lastSwingOff, swingDurationOff = nil, nil;
-    swingTriggerUpdate()
+    elseif(hand == "ranged") then
+      lastSwingRange, swingDurationRange = nil, nil;
     end
   end
 
@@ -2940,7 +2939,7 @@ function WeakAuras.WatchUnitChange(unit)
     watchUnitChange:RegisterEvent("UNIT_TARGET");
     watchUnitChange:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT");
     watchUnitChange:RegisterEvent("GROUP_ROSTER_UPDATE");
-    if WeakAuras.isAwesomeEnabled() then
+    if WeakAuras.IsAwesomeEnabled() then
       watchUnitChange:RegisterEvent("NAME_PLATE_UNIT_ADDED")
       watchUnitChange:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
     end
@@ -3312,7 +3311,7 @@ do
           if(v:GetObjectType() == "FontString") then
             local text = v:GetText();
             if(text) then
-              local _, _, name, shortenedName = text:find("^((.-) ?+?[VI%d]*) %(%d+ .+%)$");
+              local _, _, name, shortenedName = text:find("^((.-) ?+?[XVI%d]*) %(%d+ .+%)$");
               if(name) then
                 return name, shortenedName;
               end
@@ -3968,13 +3967,13 @@ local commonConditions = {
     hidden = true,
     type = "bool",
     test = function(state, needle)
-      if not state or not state.itemId or not state.show or not UnitExists('target') then
+      if not state or not state.itemname or not state.show or not UnitExists('target') then
         return false
       end
       if InCombatLockdown() and not UnitCanAttack('player', 'target') then
         return false
       end
-      return IsItemInRange(state.itemId, 'target') == (needle == 1)
+      return IsItemInRange(state.itemname, 'target') == 1 == (needle == 1)
     end,
     events = { "PLAYER_TARGET_CHANGED", "WA_SPELL_RANGECHECK", }
   },
@@ -4339,34 +4338,11 @@ end
 
 WeakAuras.CheckForItemEquipped = function(itemId, specificSlot)
   if not specificSlot then
-    if type(itemId) == "number" then
-      return IsEquippedItem(itemId or '')
-    else
-      for slot in pairs(Private.item_slot_types) do
-        if WeakAuras.CheckForItemEquipped(itemId, slot) then
-          return true
-        end
-      end
-    end
+    return IsEquippedItem(itemId)
   end
   local equippedItemID = GetInventoryItemID("player", specificSlot)
-  return itemId and equippedItemID and (
-    (type(itemId) == "number" and itemId == equippedItemID)
-    or itemId == GetItemInfo(equippedItemID)
-  )
-end
-
-Private.ExecEnv.IsEquippedItemForLoad = function(item, exact)
-  if not item then
-    return
-  end
-  if exact then
-    return WeakAuras.CheckForItemEquipped(item)
-  else
-    item = GetItemInfo(item)
-    if item then
-      return WeakAuras.CheckForItemEquipped(item)
-    end
+  if equippedItemID then
+    return itemId == equippedItemID
   end
 end
 
