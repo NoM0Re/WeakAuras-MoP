@@ -801,6 +801,18 @@ function Private.ExecEnv.CheckCombatLogFlagsObjectType(flags, flagToCheck)
   return bit.band(flags, bitToCheck) ~= 0;
 end
 
+function Private.ExecEnv.CheckRaidFlags(flags, flagToCheck)
+  flagToCheck = tonumber(flagToCheck)
+  if not flagToCheck or not flags then return end --bailout
+  if flagToCheck == 0 then --no raid mark
+    return bit.band(flags, COMBATLOG_OBJECT_RAIDTARGET_MASK) == 0
+  elseif flagToCheck == 9 then --any raid mark
+    return bit.band(flags, COMBATLOG_OBJECT_RAIDTARGET_MASK) > 0
+  else -- specific raid mark
+    return bit.band(flags, _G['COMBATLOG_OBJECT_RAIDTARGET'..flagToCheck]) > 0
+  end
+end
+
 function WeakAuras.IsSpellKnownForLoad(spell, exact)
   if spell == 0 or spell >= 2^31 then return false end
   return IsPlayerSpell(spell)
@@ -1182,13 +1194,13 @@ Private.load_prototype = {
       init = "arg",
       events = {"PLAYER_ROLES_ASSIGNED", "PLAYER_TALENT_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD"}
     },
-    --[[{
+    {
       name = "spec_position",
       display = WeakAuras.newFeatureString .. L["Spec Position"],
       type = "multiselect",
       values = "spec_position_types",
       init = "arg",
-      events = {"PLAYER_ROLES_ASSIGNED", "PLAYER_TALENT_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD"}
+      events = {"ACTIVE_TALENT_GROUP_CHANGED", "WA_DELAYED_PLAYER_ENTERING_WORLD"}
     },
     {
       name = "raid_role",
@@ -1196,8 +1208,8 @@ Private.load_prototype = {
       type = "multiselect",
       values = "raid_role_types",
       init = "arg",
-      events = {"PLAYER_ROLES_ASSIGNED"}
-    },]]
+      events = {"PLAYER_ROLES_ASSIGNED", "WA_DELAYED_PLAYER_ENTERING_WORLD"}
+    },
     {
       name = "ingroup",
       display = L["Group Type"],
@@ -1252,34 +1264,38 @@ Private.load_prototype = {
     },
     {
       name = "zoneId",
+      enable = false,
       hidden = true,
       init = "arg",
-      test = "true",
+      optional = true,
     },
     {
       name = "zonegroupId",
+      enable = false,
       hidden = true,
       init = "arg",
-      test = "true",
+      optional = true,
     },
     {
       name = "zoneIds",
-      display = L["Zone ID(s)"],
+      display = L["Player Location ID(s)"],
       type = "string",
-      events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE"},
-      desc = Private.get_zoneId_list,
-      preamble = "local zoneChecker = WeakAuras.ParseZoneCheck(%q)",
-      test = "zoneChecker:Check(zoneId, zonegroupId)"
+      multiline = true,
+      events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
+      desc = get_zoneId_list,
+      preamble = "local zoneChecker = Private.ExecEnv.ParseZoneCheck(%q)",
+      test = "zoneChecker:Check(zoneId)",
+      optional = true,
     },
     {
       name = "encounterid",
       display = L["Encounter ID(s)"],
       type = "string",
-      multiline = true,
       init = "arg",
+      multiline = true,
       desc = Private.get_encounters_list,
       test = "WeakAuras.CheckNumericIds(%q, encounterid)",
-      events = {"ENCOUNTER_START", "ENCOUNTER_END"}
+      events = {"ENCOUNTER_START", "ENCOUNTER_END"},
     },
     {
       name = "subzone",
@@ -1350,10 +1366,18 @@ Private.load_prototype = {
       test = "not IsEquippedItem(%s or '')",
       events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"},
       only_exact = true,
-    },
+    },--[[
+    {
+      name = "itemtypeequipped",
+      display = L["Item Type Equipped"],
+      type = "multiselect",
+      test = "IsEquippedItemType(Private.ExecEnv.GetItemSubClassInfo(%s) or '')",
+      events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"},
+      values = "item_weapon_types"
+    },]]
     {
       name = "item_bonusid_equipped",
-      display =  WeakAuras.newFeatureString .. L["Item Bonus Id Equipped"],
+      display =  L["Item Bonus Id Equipped"],
       type = "string",
       test = "WeakAuras.CheckForItemBonusId(%q)",
       events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED"},
@@ -2528,7 +2552,7 @@ Private.event_prototypes = {
         type = "string",
         multiline = true,
         store = true,
-        init = "tostring(tonumber(string.sub(UnitGUID(unit) or '', 8, 12), 16) or '')",
+        init = "select(6, strsplit('-', UnitGUID(unit) or ''))",
         conditionType = "string",
         preamble = "local npcIdChecker = Private.ExecEnv.ParseStringCheck(%q)",
         test = "npcIdChecker:Check(npcId)",
@@ -2565,9 +2589,9 @@ Private.event_prototypes = {
       },
       {
         name = "role",
-        display = L["Spec Role"],
+        display = L["Assigned Role"],
         type = "select",
-        init = "WeakAuras.LGT:GetUnitRole(unit)",
+        init = "UnitGroupRolesAssigned(unit)",
         values = "role_types",
         store = true,
         conditionType = "select",
@@ -2689,10 +2713,22 @@ Private.event_prototypes = {
         name = L["Absorb"],
         func = function(trigger, state)
           local absorb = state.absorb
+          if not absorb then
+            return
+          end
           if (trigger.absorbMode == "OVERLAY_FROM_START") then
             return 0, absorb;
-          else
+          elseif (trigger.absorbMode == "OVERLAY_FROM_END") then
             return "forward", absorb;
+          else
+            if not state.total then
+              return
+            end
+            local total = state.total
+            if not total then
+              return
+            end
+            return total - absorb, total
           end
         end,
         enable = function(trigger)
@@ -2703,10 +2739,19 @@ Private.event_prototypes = {
         name = L["Heal Absorb"],
         func = function(trigger, state)
           local healabsorb = state.healabsorb
+          if not healabsorb then
+            return
+          end
           if (trigger.absorbHealMode == "OVERLAY_FROM_START") then
             return 0, healabsorb;
-          else
+          elseif (trigger.absorbMode == "OVERLAY_FROM_END") then
             return "forward", healabsorb;
+          else
+            local total = state.total
+            if not total then
+              return
+            end
+            return total - healabsorb, total
           end
         end,
         enable = function(trigger)
@@ -2799,20 +2844,15 @@ Private.event_prototypes = {
         local powerType = %s;
         local unitPowerType = UnitPowerType(unit);
         local powerTypeToCheck = powerType or unitPowerType;
-        powerType = ((powerType == 99 and 1) or powerType)
+        if powerType == 99 then powerType = 1 end
       ]=]):format(trigger.unit == "group" and "true" or "false", trigger.use_powertype and trigger.powertype or "nil"))
 
       local powerType = trigger.use_powertype and trigger.powertype or nil
-      -- Combo Points
-      if powerType == 4 then
+      if (powerType == 14 or powerType == 7) then
         table.insert(ret, [[
-          local power = GetComboPoints(unit, unit .. '-target')
-          local total = math.max(1, UnitPowerMax(unit, Enum.PowerType.ComboPoints))
-        ]])
-      else
-        table.insert(ret, [[
-          local power = UnitPower(unit, powerType)
-          local total = math.max(1, UnitPowerMax(unit, powerType))
+          local displayMod = UnitPowerDisplayMod(powerType)
+          local power = UnitPower(unit, powerType, true) / displayMod
+          local total = math.max(1, UnitPowerMax(unit, powerType, true)) / displayMod
         ]])
       end
 
@@ -3193,6 +3233,9 @@ Private.event_prototypes = {
         AddUnitEventForEvents(result, unit, "UNIT_FLAGS")
       end
       AddUnitEventForEvents(result, unit, "UNIT_POWER_BAR_SHOW")
+      if trigger.use_inRange then
+        AddUnitEventForEvents(result, unit, "UNIT_IN_RANGE_UPDATE")
+      end
       return result
     end,
     internal_events = function(trigger)
@@ -3363,7 +3406,7 @@ Private.event_prototypes = {
       {
         name = "raidMarkIndex",
         display = L["Raid Mark"],
-        type = "select",
+        type = "multiselect",
         values = "raid_mark_check_type",
         store = true,
         conditionType = "select",
@@ -3428,7 +3471,7 @@ Private.event_prototypes = {
       },
       {
         name = "nameplateType",
-        display = L["Nameplate Type"],
+        display = L["Hostility"],
         type = "select",
         init = "WeakAuras.GetPlayerReaction(unit)",
         values = "hostility_types",

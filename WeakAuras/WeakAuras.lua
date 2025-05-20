@@ -1493,8 +1493,8 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
   local mounted = IsMounted() or false
 
   spec = GetSpecialization() or 0
-  specId = GetSpecializationInfo(spec) or 0
-  role = select(6, GetSpecializationInfo(spec)) or ""
+  specId = spec and GetSpecializationInfo(spec) or 0
+  role = spec and select(6, GetSpecializationInfo(spec)) or "none"
   inPetBattle = C_PetBattles.IsInBattle()
   vehicle = UnitInVehicle('player') or UnitOnTaxi('player') or false
   vehicleUi = UnitHasVehicleUI('player') or HasOverrideActionBar() or HasVehicleActionBar() or false
@@ -1505,6 +1505,12 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
 
   elseif UnitIsRaidOfficer("player") then
     raidMemberType = raidMemberType + 2
+  end
+
+  local raidID = UnitInRaid("player")
+  local raidRole
+  if raidID then
+    raidRole = select(10, GetRaidRosterInfo(raidID + 1)) or "NONE"
   end
 
   local size, difficulty, instanceType, ZoneMapID, difficultyIndex = GetInstanceTypeAndSize()
@@ -1531,8 +1537,8 @@ local function scanForLoadsImpl(toCheck, event, arg1, ...)
     if (data and not data.controlledChildren) then
       local loadFunc = loadFuncs[id];
       local loadOpt = loadFuncsForOptions[id];
-      shouldBeLoaded = loadFunc and loadFunc("ScanForLoads_Auras", inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, class, player, realm, guild, specId, race, faction, playerLevel, role, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
-      couldBeLoaded =  loadOpt and loadOpt("ScanForLoads_Auras",   inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, class, player, realm, guild, specId, race, faction, playerLevel, role, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
+      shouldBeLoaded = loadFunc and loadFunc("ScanForLoads_Auras", inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, class, player, realm, guild, specId, race, faction, playerLevel, role, role, raidRole, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
+      couldBeLoaded =  loadOpt and loadOpt("ScanForLoads_Auras",   inCombat, alive, inEncounter, pvp, inPetBattle, vehicle, vehicleUi, mounted, class, player, realm, guild, specId, race, faction, playerLevel, role, role, raidRole, group, groupSize, raidMemberType, zone, zoneId, zonegroupId, encounter_id, subzone, size, difficulty, difficultyIndex);
 
       if(shouldBeLoaded and not loaded[id]) then
         changed = changed + 1;
