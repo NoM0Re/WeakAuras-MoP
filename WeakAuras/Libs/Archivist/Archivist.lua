@@ -12,14 +12,13 @@ local embedder, namespace = ...
 local addonName, Archivist = "Archivist", {}
 -- Our only library!
 local LibDeflate = LibStub("LibDeflate")
-local Retail = LibStub("LibRetail")
 
 do -- boilerplate & static values
-	Archivist.buildDate = "20200208045410"
-	Archivist.version = "v1.0.4"
-	--[===[@debug@
+	Archivist.buildDate = "@build-time@"
+	Archivist.version = "v1.0.8"
+	--[==[@debug@
 		Archivist.debug = true
-	--@end-debug@]===]
+	--@end-debug@]==]
 
 	Archivist.prototypes = {}
 	Archivist.storeMap = {}
@@ -109,6 +108,7 @@ end
 --  Open - function (requried). Create from the provided data an active store object. Prototype may assume ownership of the provided data however it wishes.
 --  Commit - function (required). Return an image of the data that should be archived.
 --  Close - function (required). Release ownership of active store object. Optionally, return image of data to write into archive.
+--  Delete - function (optional). If provided, called when a store is deleted. Useful for cleaning up sub stores.
 -- Please note that Create, Open, Update (if provided), Commit, and Close may be called at any time if Archivist deems it necessary.
 -- Thus, these methods should ideally be as close to purely functional as is practical, to minimize friction.
 function Archivist:RegisterStoreType(prototype)
@@ -130,6 +130,7 @@ function Archivist:RegisterStoreType(prototype)
 		self:Assert(prototype.Update == nil or type(prototype.Update) == "function", "Invalid prototype field 'Update': Expected function, got %q instead.", type(prototype.Update))
 		self:Assert(type(prototype.Commit) == "function", "Invalid prototype field 'Commit': Expected function, got %q instead.", type(prototype.Commit))
 		self:Assert(type(prototype.Close) == "function", "Invalid prototype field 'Close': Expected function, got %q instead.", type(prototype.Close))
+		self:Assert(prototype.Delete == nil or type(prototype.Delete) == "function", "Invalid prototype field 'Delete': Expected function, got %q instead.", type(prototype.Delete))
 		-- prototype is now guaranteed to have Init, Create, Open, Update functions, and is thus well-formed.
 	end
 
@@ -142,7 +143,8 @@ function Archivist:RegisterStoreType(prototype)
 		Update = prototype.Update,
 		Open = prototype.Open,
 		Commit = prototype.Commit,
-		Close = prototype.Close
+		Close = prototype.Close,
+		Delete = prototype.Delete
 	}
 	self.activeStores[prototype.id] = self.activeStores[prototype.id] or {}
 	if self:IsInitialized() then
@@ -267,8 +269,10 @@ function Archivist:CloneStore(store, newId, openStore)
 	return self:Clone(info.type, info.id, newId, openStore)
 end
 
--- deletes archived data if store is not currently open
--- Deleting unregistered store types must be done via setting force
+-- Closes store (if open), then deletes data from archive
+-- Prototype is given opportunity to perform actions using image (usually, to delete other sub stores)
+-- if store type is not registered, then force flag must be set in order to delete data,
+-- to reduce the chance of accidents
 function Archivist:Delete(storeType, id, force)
 	do -- arg validation
 		self:Warn(force or type(storeType == "string") and self.sv[storeType], "There are no stores to delete.")
@@ -276,6 +280,12 @@ function Archivist:Delete(storeType, id, force)
 	end
 
 	if id and storeType and self.sv[storeType] then
+		if self.prototypes[storeType] and self.prototypes[storeType].Delete and self.sv[storeType][id] then
+			local image = self.activeStores[storeType][id]
+						 and self:Close(self.activeStores[storeType][id])
+						 or self:DeArchive(self.sv[storeType][id].data)
+			self.prototypes[storeType]:Delete(image)
+		end
 		self.sv[storeType][id] = nil
 	end
 end
@@ -326,7 +336,7 @@ end
 -- Don't say I didn't warn you
 function Archivist:DeleteAll(storeType)
 	if storeType then
-		self.sv[storeType] = nil
+		self.sv[storeType] = {}
 		for id, store in pairs(self.activeStores[storeType]) do
 			self.activeStores[storeType][id] = nil
 			self.storeMap[store] = nil
@@ -336,8 +346,8 @@ function Archivist:DeleteAll(storeType)
 			self.sv[id] = {}
 			self.activeStores[id] = {}
 		end
+		self.storeMap = {}
 	end
-	self.storeMap = {}
 end
 
 -- deactivates store, with one last opportunity to commit data if the prototype chooses to do so
@@ -499,7 +509,7 @@ do -- function Archivist:DeArchive(encoded)
 		["#"] = "\007",
 		[":"] = "\008",
 	}
-	local unused2Escape = Retail.tInvert(escape2unused)
+	local unused2Escape = tInvert(escape2unused)
 	local unused = "[\001-\008]"
 	local function unusify(c)
 		return escape2unused[c] or c
@@ -577,4 +587,3 @@ do -- function Archivist:DeArchive(encoded)
 		return data
 	end
 end
--- /run WeakAuras.LoadFromArchive("Repository", "history")
