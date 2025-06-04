@@ -19571,4 +19571,5 @@ globals = {
 	"MinutesToTime", "FormatShortDate", "NUMBER_ABBREVIATION_DATA", "WeakAurasProfilingReportTitleText",
 	"WeakAurasRealTimeProfiling", "WeakAurasRealTimeProfilingTitleText", "seconds", "NUM_CHAT_WINDOWS",
 	"MAX_NUM_TALENT_TIERS",
+	"GetNumGlyphSockets", "GetGlyphLink", "GetGlyphSocketInfo"
 }

@@ -1282,7 +1282,7 @@ Private.load_prototype = {
       type = "string",
       multiline = true,
       events = {"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "VEHICLE_UPDATE", "WA_DELAYED_PLAYER_ENTERING_WORLD"},
-      desc = get_zoneId_list,
+      desc = Private.get_zoneId_list,
       preamble = "local zoneChecker = Private.ExecEnv.ParseZoneCheck(%q)",
       test = "zoneChecker:Check(zoneId)",
       optional = true,
