@@ -1499,6 +1499,7 @@ Private.eclipse_direction_types = {
   sun = L["Sun"],
   moon = L["Moon"]
 }
+
 Private.miss_types = {
   ABSORB = L["Absorb"],
   BLOCK = L["Block"],
@@ -1608,6 +1609,24 @@ Private.item_quality_types = {
   [8] = ITEM_QUALITY8_DESC,
 }
 
+Private.totalcount_currencies = {
+  [45624] = 3018, -- Emblems of Conquest
+  [40753] = 1465, -- Emblems of Valor
+  [29434] = 1462, -- Badges of Justice
+  [40752] = 1464, -- Emblems of Heroism
+  [47241] = 4729, -- Emblems of Triumph
+  [49426] = 4730, -- Emblems of Frost
+}
+
+function Private.ExecEnv.GetTotalCountCurrencies(currencyID)
+  local achievementID = Private.totalcount_currencies[currencyID]
+  if achievementID then
+      local totalEarned = GetStatistic(achievementID)
+      return tonumber(totalEarned) or 0
+  end
+  return 0
+end
+
 local function InitializeCurrencies()
   if Private.discovered_currencies and next(Private.discovered_currencies) then
     return
@@ -1618,7 +1637,7 @@ local function InitializeCurrencies()
 
   local expanded = {}
   for index = GetCurrencyListSize(), 1, -1 do
-  local name, isHeader, isExpanded, _, _, _, _, _, _ = GetCurrencyListInfo(index)
+  local name, isHeader, isExpanded = GetCurrencyListInfo(index)
     if isHeader and not isExpanded then
       ExpandCurrencyList(index, true)
       expanded[name] = true
@@ -1626,11 +1645,16 @@ local function InitializeCurrencies()
   end
 
   for index = 1, GetCurrencyListSize() do
-    local name, isHeader, _, _, _, _, _, iconFileID, itemID = GetCurrencyListInfo(index)
-    local currencyLink = tonumber(itemID) and GetItemInfo(itemID)
+    local name, isHeader, _, _, _, _, currencyType, iconFileID, itemID = GetCurrencyListInfo(index)
 
-    if currencyLink then
-      local icon = iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark" --iconFileID not available on first login
+    local icon
+    if currencyType == 1 then	-- Arena points
+      icon = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
+    elseif currencyType == 2 then -- Honor points
+      icon = "Interface\\BattlefieldFrame\\Battleground-".. UnitFactionGroup("player")
+    end
+    if itemID and iconFileID then
+      icon = icon or iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark" -- iconFileID not available on first login
       Private.discovered_currencies[itemID] = "|T" .. icon .. ":0|t" .. name
       Private.discovered_currencies_sorted[itemID] = index
     elseif isHeader then
@@ -1687,29 +1711,24 @@ Private.ExecEnv.GetFactionDataByIndex = function(index)
 end
 
 Private.ExecEnv.GetFactionDataByID = function(ID)
-  local factionName = ID and Private.id_to_faction[ID]
-  if factionName then
-    for index = 1, GetNumFactions() do
-      local name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild = GetFactionInfo(index)
-      if name == factionName then
-        return {
-          factionID = ID,
-          name = name,
-          description = description,
-          reaction = standingID,
-          currentReactionThreshold = barMin,
-          nextReactionThreshold = barMax,
-          currentStanding = barValue,
-          atWarWith = atWarWith or false,
-          canToggleAtWar = canToggleAtWar,
-          isChild = isChild,
-          isHeader = isHeader,
-          isHeaderWithRep = hasRep,
-          isCollapsed = isCollapsed,
-          isWatched = isWatched,
-        }
-      end
-    end
+  local name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild = GetFactionInfoByID(ID or 0)
+  if name then
+    return {
+      factionID = ID,
+      name = name,
+      description = description,
+      reaction = standingID,
+      currentReactionThreshold = barMin,
+      nextReactionThreshold = barMax,
+      currentStanding = barValue,
+      atWarWith = atWarWith or false,
+      canToggleAtWar = canToggleAtWar,
+      isChild = isChild,
+      isHeader = isHeader,
+      isHeaderWithRep = hasRep,
+      isCollapsed = isCollapsed,
+      isWatched = isWatched,
+    }
   end
 end
 
@@ -2435,12 +2454,14 @@ Private.string_operator_types = {
 
 Private.weapon_types = {
   ["main"] = MAINHANDSLOT,
-  ["off"] = SECONDARYHANDSLOT
+  ["off"] = SECONDARYHANDSLOT,
+  ["ranged"] = RANGEDSLOT,
 }
 
 Private.swing_types = {
   ["main"] = MAINHANDSLOT,
-  ["off"] = SECONDARYHANDSLOT
+  ["off"] = SECONDARYHANDSLOT,
+  ["ranged"] = RANGEDSLOT
 }
 
 Private.rune_specific_types = {
@@ -2739,9 +2760,9 @@ end
 Private.creature_type_types = {
   [1] = L["Beast"],
   [2] = L["Dragonkin"],
-  [3] = L["Demon"],
-  [4] = L["Elemental"],
-  [5] = L["Giant"],
+  [3] = GetFactionInfoByID(73) or "", -- Demon
+  [4] = GetFactionInfoByID(74) or "", -- Elemental
+  [5] = GetFactionInfoByID(511) or "", -- Giant
   [6] = L["Undead"],
   [7] = L["Humanoid"],
   [8] = L["Critter"],
@@ -2757,9 +2778,9 @@ Private.creature_type_types = {
 Private.ExecEnv.creature_type_name_to_id = {
   [L["Beast"]] = 1,
   [L["Dragonkin"]] = 2,
-  [L["Demon"]] = 3,
-  [L["Elemental"]] = 4,
-  [L["Giant"]] = 5,
+  [GetFactionInfoByID(73) or ""] = 3, -- Demon
+  [GetFactionInfoByID(74) or ""] = 4, -- Elemental
+  [GetFactionInfoByID(511) or ""] = 5, -- Giant
   [L["Undead"]] = 6,
   [L["Humanoid"]] = 7,
   [L["Critter"]] = 8,
@@ -2788,7 +2809,7 @@ Private.creature_family_types = {
   [16] = L["Voidwalker"],
   [17] = L["Succubus"],
   [19] = L["Doomguard"],
-  [20] = L["Scorpid"],
+  [20] = L[GetFactionInfoByID(309) or ""], -- Scorpid
   [21] = L["Turtle"],
   [23] = L["Imp"],
   [24] = L["Bat"],
@@ -2798,7 +2819,7 @@ Private.creature_family_types = {
   [28] = L["Remote Control"],
   [29] = L["Felguard"],
   [30] = L["Dragonhawk"],
-  [31] = L["Ravager"],
+  [31] = GetFactionInfoByID(1039) or "", -- Ravager
   [32] = L["Warp Stalker"],
   [33] = L["Sporebat"],
   [34] = L["Nether Ray"],
@@ -2807,7 +2828,7 @@ Private.creature_family_types = {
   [38] = L["Chimaera"],
   [39] = L["Devilsaur"],
   [40] = L["Ghoul"],
-  [41] = L["Silithid"],
+  [41] = GetFactionInfoByID(249) or "", -- Silithid
   [42] = L["Worm"],
   [43] = L["Rhino"],
   [44] = L["Wasp"],
@@ -2832,7 +2853,7 @@ Private.ExecEnv.creature_family_name_to_id = {
   [L["Voidwalker"]] = 16,
   [L["Succubus"]] = 17,
   [L["Doomguard"]] = 19,
-  [L["Scorpid"]] = 20,
+  [GetFactionInfoByID(309) or ""] = 20, -- Scorpid
   [L["Turtle"]] = 21,
   [L["Imp"]] = 23,
   [L["Bat"]] = 24,
@@ -2842,7 +2863,7 @@ Private.ExecEnv.creature_family_name_to_id = {
   [L["Remote Control"]] = 28,
   [L["Felguard"]] = 29,
   [L["Dragonhawk"]] = 30,
-  [L["Ravager"]] = 31,
+  [GetFactionInfoByID(1039) or ""] = 31, -- Ravager
   [L["Warp Stalker"]] = 32,
   [L["Sporebat"]] = 33,
   [L["Nether Ray"]] = 34,
@@ -2851,7 +2872,7 @@ Private.ExecEnv.creature_family_name_to_id = {
   [L["Chimaera"]] = 38,
   [L["Devilsaur"]] = 39,
   [L["Ghoul"]] = 40,
-  [L["Silithid"]] = 41,
+  [GetFactionInfoByID(249) or ""] = 41, -- Silithid
   [L["Worm"]] = 42,
   [L["Rhino"]] = 43,
   [L["Wasp"]] = 44,
@@ -3944,182 +3965,66 @@ WeakAuras.StopMotion.animation_types = {
   progress = L["Progress"]
 }
 
-Private.id_to_faction = {
-  ["21"] = L["Booty Bay"],
-  ["47"] = L["Ironforge"],
-  ["54"] = L["Gnomeregan"],
-  ["59"] = L["Thorium Brotherhood"],
-  ["67"] = L["Horde"],
-  ["68"] = L["Undercity"],
-  ["69"] = L["Darnassus"],
-  ["70"] = L["Syndicate"],
-  ["72"] = L["Stormwind"],
-  ["76"] = L["Orgrimmar"],
-  ["81"] = L["Thunder Bluff"],
-  ["87"] = L["Bloodsail Buccaneers"],
-  ["92"] = L["Gelkis Clan Centaur"],
-  ["93"] = L["Magram Clan Centaur"],
-  ["270"] = L["Zandalar Tribe"],
-  ["349"] = L["Ravenholdt"],
-  ["369"] = L["Gadgetzan"],
-  ["469"] = L["Alliance"],
-  ["470"] = L["Ratchet"],
-  ["509"] = L["The League of Arathor"],
-  ["510"] = L["The Defilers"],
-  ["529"] = L["Argent Dawn"],
-  ["530"] = L["Darkspear Trolls"],
-  ["576"] = L["Timbermaw Hold"],
-  ["577"] = L["Everlook"],
-  ["589"] = L["Wintersaber Trainers"],
-  ["609"] = L["Cenarion Circle"],
-  ["729"] = L["Frostwolf Clan"],
-  ["730"] = L["Stormpike Guard"],
-  ["749"] = L["Hydraxian Waterlords"],
-  ["809"] = L["Shen'dralar"],
-  ["889"] = L["Warsong Outriders"],
-  ["890"] = L["Silverwing Sentinels"],
-  ["909"] = L["Darkmoon Faire"],
-  ["910"] = L["Brood of Nozdormu"],
-  ["911"] = L["Silvermoon City"],
-  ["922"] = L["Tranquillien"],
-  ["930"] = L["Exodar"],
-  ["932"] = L["The Aldor"],
-  ["933"] = L["The Consortium"],
-  ["934"] = L["The Scryers"],
-  ["935"] = L["The Sha'tar"],
-  ["941"] = L["The Mag'har"],
-  ["942"] = L["Cenarion Expedition"],
-  ["946"] = L["Honor Hold"],
-  ["947"] = L["Thrallmar"],
-  ["967"] = L["The Violet Eye"],
-  ["970"] = L["Sporeggar"],
-  ["978"] = L["Kurenai"],
-  ["989"] = L["Keepers of Time"],
-  ["990"] = L["The Scale of the Sands"],
-  ["1011"] = L["Lower City"],
-  ["1012"] = L["Ashtongue Deathsworn"],
-  ["1015"] = L["Netherwing"],
-  ["1031"] = L["Sha'tari Skyguard"],
-  ["1037"] = L["Alliance Vanguard"],
-  ["1038"] = L["Ogri'la"],
-  ["1050"] = L["Valiance Expedition"],
-  ["1052"] = L["Horde Expedition"],
-  ["1064"] = L["The Taunka"],
-  ["1067"] = L["The Hand of Vengeance"],
-  ["1068"] = L["Explorers' League"],
-  ["1073"] = L["The Kalu'ak"],
-  ["1077"] = L["Shattered Sun Offensive"],
-  ["1085"] = L["Warsong Offensive"],
-  ["1090"] = L["Kirin Tor"],
-  ["1091"] = L["The Wyrmrest Accord"],
-  ["1094"] = L["The Silver Covenant"],
-  ["1098"] = L["Knights of the Ebon Blade"],
-  ["1104"] = L["Frenzyheart Tribe"],
-  ["1105"] = L["The Oracles"],
-  ["1106"] = L["Argent Crusade"],
-  ["1119"] = L["The Sons of Hodir"],
-  ["1124"] = L["The Sunreavers"],
-  ["1126"] = L["The Frostborn"],
-  ["1133"] = L["Bilgewater Cartel"],
-  ["1134"] = L["Gilneas"],
-  ["1135"] = L["The Earthen Ring"],
-  ["1156"] = L["The Ashen Verdict"],
-  ["1158"] = L["Guardians of Hyjal"],
-  ["1171"] = L["Therazane"],
-  ["1172"] = L["Dragonmaw Clan"],
-  ["1173"] = L["Ramkahen"],
-  ["1174"] = L["Wildhammer Clan"],
-  ["1177"] = L["Baradin's Wardens"],
-  ["1178"] = L["Hellscream's Reach"],
-  ["10000"] = L["Winterfin Retreat"],
-}
+do
+  local function addGlyphFromSpellID(id, sorted)
+    local name, _, icon = GetSpellInfo(id or 0)
+    if name and icon and not Private.glyph_types[id] then
+      Private.glyph_types[id] = "|T" .. icon .. ":0|t" .. name
+      table.insert(sorted, { glyphID = id, name = name })
+    end
+  end
 
-Private.faction_to_id = {
-  [L["Booty Bay"]] = 21,
-  [L["Ironforge"]] = 47,
-  [L["Gnomeregan"]] = 54,
-  [L["Thorium Brotherhood"]] = 59,
-  [L["Horde"]] = 67,
-  [L["Undercity"]] = 68,
-  [L["Darnassus"]] = 69,
-  [L["Syndicate"]] = 70,
-  [L["Stormwind"]] = 72,
-  [L["Orgrimmar"]] = 76,
-  [L["Thunder Bluff"]] = 81,
-  [L["Bloodsail Buccaneers"]] = 87,
-  [L["Gelkis Clan Centaur"]] = 92,
-  [L["Magram Clan Centaur"]] = 93,
-  [L["Zandalar Tribe"]] = 270,
-  [L["Ravenholdt"]] = 349,
-  [L["Gadgetzan"]] = 369,
-  [L["Alliance"]] = 469,
-  [L["Ratchet"]] = 470,
-  [L["The League of Arathor"]] = 509,
-  [L["The Defilers"]] = 510,
-  [L["Argent Dawn"]] = 529,
-  [L["Darkspear Trolls"]] = 530,
-  [L["Timbermaw Hold"]] = 576,
-  [L["Everlook"]] = 577,
-  [L["Wintersaber Trainers"]] = 589,
-  [L["Cenarion Circle"]] = 609,
-  [L["Frostwolf Clan"]] = 729,
-  [L["Stormpike Guard"]] = 730,
-  [L["Hydraxian Waterlords"]] = 749,
-  [L["Shen'dralar"]] = 809,
-  [L["Warsong Outriders"]] = 889,
-  [L["Silverwing Sentinels"]] = 890,
-  [L["Darkmoon Faire"]] = 909,
-  [L["Brood of Nozdormu"]] = 910,
-  [L["Silvermoon City"]] = 911,
-  [L["Tranquillien"]] = 922,
-  [L["Exodar"]] = 930,
-  [L["The Aldor"]] = 932,
-  [L["The Consortium"]] = 933,
-  [L["The Scryers"]] = 934,
-  [L["The Sha'tar"]] = 935,
-  [L["The Mag'har"]] = 941,
-  [L["Cenarion Expedition"]] = 942,
-  [L["Honor Hold"]] = 946,
-  [L["Thrallmar"]] = 947,
-  [L["The Violet Eye"]] = 967,
-  [L["Sporeggar"]] = 970,
-  [L["Kurenai"]] = 978,
-  [L["Keepers of Time"]] = 989,
-  [L["The Scale of the Sands"]] = 990,
-  [L["Lower City"]] = 1011,
-  [L["Ashtongue Deathsworn"]] = 1012,
-  [L["Netherwing"]] = 1015,
-  [L["Sha'tari Skyguard"]] = 1031,
-  [L["Alliance Vanguard"]] = 1037,
-  [L["Ogri'la"]] = 1038,
-  [L["Valiance Expedition"]] = 1050,
-  [L["Horde Expedition"]] = 1052,
-  [L["The Taunka"]] = 1064,
-  [L["The Hand of Vengeance"]] = 1067,
-  [L["Explorers' League"]] = 1068,
-  [L["The Kalu'ak"]] = 1073,
-  [L["Shattered Sun Offensive"]] = 1077,
-  [L["Warsong Offensive"]] = 1085,
-  [L["Kirin Tor"]] = 1090,
-  [L["The Wyrmrest Accord"]] = 1091,
-  [L["The Silver Covenant"]] = 1094,
-  [L["Knights of the Ebon Blade"]] = 1098,
-  [L["Frenzyheart Tribe"]] = 1104,
-  [L["The Oracles"]] = 1105,
-  [L["Argent Crusade"]] = 1106,
-  [L["The Sons of Hodir"]] = 1119,
-  [L["The Sunreavers"]] = 1124,
-  [L["The Frostborn"]] = 1126,
-  [L["Bilgewater Cartel"]] = 1133,
-  [L["Gilneas"]] = 1134,
-  [L["The Earthen Ring"]] = 1135,
-  [L["The Ashen Verdict"]] = 1156,
-  [L["Guardians of Hyjal"]] = 1158,
-  [L["Therazane"]] = 1171,
-  [L["Dragonmaw Clan"]] = 1172,
-  [L["Ramkahen"]] = 1173,
-  [L["Wildhammer Clan"]] = 1174,
-  [L["Baradin's Wardens"]] = 1177,
-  [L["Hellscream's Reach"]] = 1178,
-  [L["Winterfin Retreat"]] = 10000,
-}
+  local function addEquippedGlyphs(sorted)
+    for i = 1, GetNumGlyphSockets() or 6 do
+      local _, _, glyphID, icon = GetGlyphSocketInfo(i)
+      if glyphID and icon and not Private.glyph_types[glyphID] then
+        local name = GetSpellInfo(glyphID)
+        if name then
+          Private.glyph_types[glyphID] = "|T" .. icon .. ":0|t" .. name
+          table.insert(sorted, { glyphID = glyphID, name = name })
+        end
+      end
+    end
+  end
+
+  Private.InitializeGlyphs = function(glyphId)
+    Private.glyph_types = {}
+    Private.glyph_sorted = {}
+    local sorted = {}
+
+    addEquippedGlyphs(sorted)
+    if glyphId then
+      if glyphId.single then
+        addGlyphFromSpellID(glyphId.single, sorted)
+      end
+      if glyphId.multi then
+        for _, id in ipairs(glyphId.multi) do
+          addGlyphFromSpellID(id, sorted)
+        end
+      end
+    end
+
+    table.sort(sorted, function(a, b)
+      return a.name < b.name
+    end)
+
+    for _, glyph in ipairs(sorted) do
+      table.insert(Private.glyph_sorted, glyph.glyphID)
+    end
+  end
+end
+
+Private.faction_to_id = {}
+do
+  local factionIDs = {
+    21, 47, 54, 59, 67, 68, 69, 70, 72, 76, 81, 87, 92, 93, 270, 349,
+    369, 469, 470, 509, 510, 529, 530, 576, 577, 589, 609, 729, 730, 749,
+    809, 889, 890, 909, 910, 911, 922, 930, 932, 933, 934, 935, 941, 942,
+    946, 947, 967, 970, 978, 989, 990, 1011, 1012, 1015, 1031, 1037, 1038,
+    1050, 1052, 1064, 1067, 1068, 1073, 1077, 1085, 1090, 1091, 1094, 1098,
+    1104, 1105, 1106, 1119, 1124, 1126, 1156
+  }
+  for _, id in ipairs(factionIDs) do
+      Private.faction_to_id[GetFactionInfoByID(id) or ""] = id
+  end
+end

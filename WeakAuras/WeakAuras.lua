@@ -1138,6 +1138,8 @@ function Private.Login(takeNewSnapshots)
       db.history = nil
     end
 
+    coroutine.yield(3000, "login check uid corruption")
+
     local toAdd = {};
     loginFinished = false
     loginMessage = L["Options will open after the login process has completed."]
@@ -1710,7 +1712,9 @@ local function UnloadAll()
   for id in pairs(loaded) do
     local func = Private.customActionsFunctions[id] and Private.customActionsFunctions[id]["unload"]
     if func then
+      Private.ActivateAuraEnvironment(id)
       xpcall(func, Private.GetErrorHandlerId(id, "onUnload"))
+      Private.ActivateAuraEnvironment(nil)
     end
   end
   wipe(loaded);
@@ -1763,7 +1767,9 @@ function Private.LoadDisplays(toLoad, ...)
   for id in pairs(toLoad) do
     local func = Private.customActionsFunctions[id] and Private.customActionsFunctions[id]["load"]
     if func then
+      Private.ActivateAuraEnvironment(id)
       xpcall(func, Private.GetErrorHandlerId(id, "onLoad"))
+      Private.ActivateAuraEnvironment(nil)
     end
   end
 end
@@ -1772,7 +1778,9 @@ function Private.UnloadDisplays(toUnload, ...)
   for id in pairs(toUnload) do
     local func = Private.customActionsFunctions[id] and Private.customActionsFunctions[id]["unload"]
     if func then
+      Private.ActivateAuraEnvironment(id)
       xpcall(func, Private.GetErrorHandlerId(id, "onUnload"))
+      Private.ActivateAuraEnvironment(nil)
     end
   end
   for _, triggerSystem in pairs(triggerSystems) do
@@ -1780,7 +1788,6 @@ function Private.UnloadDisplays(toUnload, ...)
   end
 
   for id in pairs(toUnload) do
-
     if triggerState[id] then
       for i = 1, triggerState[id].numTriggers do
         if (triggerState[id][i]) then
@@ -1842,6 +1849,7 @@ function WeakAuras.Delete(data)
   local uid = data.uid
   local parentId = data.parent
   local parentUid = data.parent and db.displays[data.parent].uid
+
 
   if loaded[id] then
     Private.UnloadDisplays({[id] = true})
@@ -2321,6 +2329,7 @@ local function loadOrder(tbl, idtable)
     load(id, {});
     coroutine.yield(100, "sort deps")
   end
+
   return order
 end
 
@@ -2367,7 +2376,7 @@ function Private.AddMany(tbl, takeSnapshots)
     else
       if next(WeakAuras.LoadFromArchive("Repository", "migration").stores) ~= nil then
         timer:ScheduleTimer(function()
-          prettyPrint(L["WeakAuras has detected empty settings. If this is unexpected, ask for assitance on https://discord.gg/weakauras."])
+          prettyPrint(L["WeakAuras has detected empty settings. If this is unexpected, ask for assitance on https://discord.gg/UXSc7nt."])
         end, 1)
       end
     end
@@ -2898,7 +2907,7 @@ function pAdd(data, simpleChange)
         Private.ClearAuraEnvironment(parent.id);
       end
 
-      db.displays[id] = data;
+      db.displays[id] = data
 
       if (not data.triggers.activeTriggerMode or data.triggers.activeTriggerMode > #data.triggers) then
         data.triggers.activeTriggerMode = Private.trigger_modes.first_active;
@@ -3114,8 +3123,8 @@ local function EnsureRegion(id)
 
     -- So we go up the list of parents and collect auras that must be created
     -- If we find a parent already exists, we can stop
-
     local aurasToCreate = {}
+
     while(id) do
       local data = WeakAuras.GetData(id)
       tinsert(aurasToCreate, data.id)
@@ -3802,6 +3811,7 @@ local function CreateFallbackState(id, triggernum)
   if (triggerSystem) then
     triggerSystem.CreateFallbackState(data, triggernum, state)
     state.id = id
+    state.trigger = data.triggers[triggernum].trigger
     state.triggernum = triggernum
   else
     state.show = true;
@@ -3832,22 +3842,18 @@ function Private.ShowMouseoverTooltip(region, owner)
   GameTooltip:SetPoint("LEFT", owner, "RIGHT");
   GameTooltip:ClearLines();
 
-  local trigger
-  local state = region.state
-  if state and state.id and state.triggernum then
-    local data = WeakAuras.GetData(state.id)
-    if data then
-      trigger = data.triggers[state.triggernum].trigger
-    end
+  local triggerType;
+  if (region.state) then
+    triggerType = region.state.trigger.type;
   end
 
-  local triggerSystem = trigger and trigger.type and triggerTypes[trigger.type]
+  local triggerSystem = triggerType and triggerTypes[triggerType];
   if (not triggerSystem) then
     GameTooltip:Hide();
     return;
   end
 
-  if (triggerSystem.SetToolTip(trigger, region.state)) then
+  if (triggerSystem.SetToolTip(region.state.trigger, region.state)) then
     GameTooltip:Show();
   else
     GameTooltip:Hide();
@@ -3883,17 +3889,11 @@ do
   end
 end
 
-function WeakAuras.GetAuraTooltipInfo(unit, index, filter)
-  local tooltip = WeakAuras.GetHiddenTooltip();
-  tooltip:ClearLines();
-  tooltip:SetUnitAura(unit, index, filter);
-  local tooltipTextLine = select(3, tooltip:GetRegions())
-
-  local tooltipText = tooltipTextLine and tooltipTextLine:GetObjectType() == "FontString" and tooltipTextLine:GetText() or "";
+function Private.ParseTooltipText(tooltipText)
   local debuffType = "none";
   local tooltipSize = {};
   if(tooltipText) then
-    for t in tooltipText:gmatch("(%d[%d%.,]*)") do
+    for t in tooltipText:gmatch("(-?%d[%d%.,]*)") do
       if (LARGE_NUMBER_SEPERATOR == ",") then
         t = t:gsub(",", "");
       else
@@ -3909,6 +3909,17 @@ function WeakAuras.GetAuraTooltipInfo(unit, index, filter)
   else
     return tooltipText, debuffType, 0;
   end
+end
+
+function WeakAuras.GetAuraTooltipInfo(unit, index, filter)
+  local tooltipText = ""
+  local tooltip = WeakAuras.GetHiddenTooltip();
+  tooltip:ClearLines();
+  tooltip:SetUnitAura(unit, index, filter);
+  local tooltipTextLine = select(3, tooltip:GetRegions())
+  tooltipText = tooltipTextLine and tooltipTextLine:GetObjectType() == "FontString" and tooltipTextLine:GetText() or "";
+
+  return Private.ParseTooltipText(tooltipText)
 end
 
 local FrameTimes = {};
@@ -4532,6 +4543,7 @@ function Private.UpdatedTriggerState(id)
     local anyStateShown = false;
 
     for cloneId, state in pairs(triggerState[id][triggernum]) do
+      state.trigger = db.displays[id].triggers[triggernum] and db.displays[id].triggers[triggernum].trigger;
       state.triggernum = triggernum;
       state.id = id;
 
@@ -5911,11 +5923,11 @@ function Private.SortOrderForValues(values)
     local aValue = values[aKey]
     local bValue = values[bKey]
 
-    if aValue:sub(1, #WeakAuras.newFeatureString) == WeakAuras.newFeatureString then
+    if type(aValue) == "string" and aValue:sub(1, #WeakAuras.newFeatureString) == WeakAuras.newFeatureString then
       aValue = aValue:sub(#WeakAuras.newFeatureString + 1)
     end
 
-    if bValue:sub(1, #WeakAuras.newFeatureString) == WeakAuras.newFeatureString then
+    if type(bValue) == "string" and bValue:sub(1, #WeakAuras.newFeatureString) == WeakAuras.newFeatureString then
       bValue = bValue:sub(#WeakAuras.newFeatureString + 1)
     end
 
