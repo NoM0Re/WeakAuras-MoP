@@ -3375,43 +3375,80 @@ function Private.ValueToPath(data, path, value)
   end
 end
 
-Private.frameLevels = {};
+Private.frameLevels = {}
 local function SetFrameLevel(id, frameLevel)
-  if (Private.frameLevels[id] == frameLevel) then
-    return;
+  frameLevel = math.min(120, frameLevel)
+  if Private.frameLevels[id] == frameLevel then
+    return
   end
   if (WeakAuras.regions[id] and WeakAuras.regions[id].region) then
     Private.ApplyFrameLevel(WeakAuras.regions[id].region, frameLevel)
   end
-  if (clones[id]) then
-    for i,v in pairs(clones[id]) do
+  if clones[id] then
+    for _, v in pairs(clones[id]) do
       Private.ApplyFrameLevel(v, frameLevel)
     end
   end
-  Private.frameLevels[id] = frameLevel;
+  Private.frameLevels[id] = frameLevel
 end
 
-function Private.FixGroupChildrenOrderForGroup(data)
-  local frameLevel = 1;
-  if data.parent == nil then
-    for child in Private.TraverseAll(data) do
-      SetFrameLevel(child.id, frameLevel);
-      frameLevel = frameLevel + 4;
+-- DepthBasedFrameLevels:
+-- Root Group (0)
+-- ├─ Aura (4)
+-- ├─ Child Group (4)
+-- │  ├─ Aura (8)
+-- │  └─ Aura (8)
+-- Root Aura (0)
+local function ApplyDepthBasedFrameLevels(data, depth)
+  local frameLevel = depth * 4
+  SetFrameLevel(data.id, frameLevel)
+
+  if not data.controlledChildren then
+    return
+  end
+
+  for _, childId in ipairs(data.controlledChildren) do
+    local childData = WeakAuras.GetData(childId)
+    if childData then
+      ApplyDepthBasedFrameLevels(childData, depth + 1)
     end
   end
 end
 
+function Private.FixGroupChildrenOrderForGroup(data)
+  if data.parent then
+    return
+  end
+  ApplyDepthBasedFrameLevels(data, 0)
+end
+
 local function GetFrameLevelFor(id)
-  return Private.frameLevels[id] or 5;
+  return Private.frameLevels[id] or 5
 end
 
 function Private.ApplyFrameLevel(region, frameLevel)
   frameLevel = frameLevel or GetFrameLevelFor(region.id)
-  region:SetFrameLevel(frameLevel)
+
+  local setBackgroundFrameLevel = false
   if region.subRegions then
     for index, subRegion in pairs(region.subRegions) do
-      subRegion:SetFrameLevel(frameLevel + index + 1)
+      if subRegion.type == "subbackground" then
+        subRegion:SetFrameLevel(frameLevel + index)
+        setBackgroundFrameLevel = true
+      end
     end
+
+    if not setBackgroundFrameLevel then
+      region:SetFrameLevel(frameLevel)
+    end
+
+    for index, subRegion in pairs(region.subRegions) do
+      if subRegion.type ~= "subbackground" then
+        subRegion:SetFrameLevel(frameLevel + index)
+      end
+    end
+  else
+    region:SetFrameLevel(frameLevel)
   end
 end
 
