@@ -5,6 +5,7 @@
 ## X-Category: Library
 ## X-License: BSD
 ## Version: 1.0.0
+## Dependencies: LibRetail
 ## OptionalDeps: Masque
 
 LibStub\LibStub.lua
